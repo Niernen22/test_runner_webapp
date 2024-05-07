@@ -1,16 +1,14 @@
 from flask import Flask, render_template, abort
-import cx_Oracle
+import oracledb
 import config
 
 app = Flask(__name__)
 
-# Define the connection parameters
-username = 'username'
+username = 'sartasnadi'
 password = 'password'
-dsn = 'RDWD'
+dsn='rstodsdev1.develop:1521/RDWD'
 
-# Create a connection to the Oracle database
-connection = cx_Oracle.connect(username, password, dsn)
+connection = oracledb.connect(user=username, password=password, dsn=dsn)
 
 @app.route('/favicon.ico')
 def favicon():
@@ -21,7 +19,7 @@ def index():
     try:
         cursor = connection.cursor()
 
-        query = f"SELECT * FROM {config.schema}.{config.table_name}"
+        query = "SELECT * FROM TESTS"
         cursor.execute(query)
         tests = cursor.fetchall()
 
@@ -29,7 +27,7 @@ def index():
 
         return render_template('index.html', tests=tests)
     
-    except cx_Oracle.Error as error:
+    except oracledb.Error as error:
         return f"Error connecting to Oracle DB: {error}"
 
 @app.route('/test_steps/<test_id>')
