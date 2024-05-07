@@ -1,2 +1,3 @@
-schema = 'SARTASNADI'
-table_name = 'TESTS'
+username = 'sartasnadi'
+password = 'password'
+dsn='dsn'
