@@ -11,7 +11,6 @@ dsn = config.dsn
 #connection = oracledb.connect(user=username, password=password, dsn=dsn)
 pool = oracledb.create_pool(user=username, password=password, dsn=dsn,
                             min=1, max=5, increment=1)
-connection = pool.acquire()
 
 @app.route('/favicon.ico')
 def favicon():
@@ -20,6 +19,7 @@ def favicon():
 @app.route('/')
 def index():
     try:
+        connection = pool.acquire()
         cursor = connection.cursor()
 
         query = "SELECT * FROM TESTS"
@@ -36,6 +36,7 @@ def index():
 @app.route('/test_steps/<test_id>')
 def test_steps(test_id):
     try:
+        connection = pool.acquire()
         cursor = connection.cursor()
 
         query = "SELECT * FROM TEST_STEPS WHERE TEST_ID = :test_id"
