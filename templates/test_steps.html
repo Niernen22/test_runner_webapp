@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Steps for Test ID: {{ test_id }}</title>
+</head>
+<body>
+    <h1>Test Steps for Test ID: {{ test_id }}</h1>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Step Name</th>
+                <th>Order Number</th>
+                <th>Status</th>
+                <th>Start Time</th>
+                <th>End Time</th>
+                <th>Type</th>
+                <th>SQL Code</th>
+                <th>Target User</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for step in test_steps %}
+                <tr>
+                    <td>{{ step[0] }}</td>
+                    <td>{{ step[2] }}</td>
+                    <td>{{ step[3] }}</td>
+                    <td>{{ step[4] }}</td>
+                    <td>{{ step[5] }}</td>
+                    <td>{{ step[6] }}</td>
+                    <td>{{ step[7] }}</td>
+                    <td>{{ step[8] }}</td>
+                    <td>{{ step[9] }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>
