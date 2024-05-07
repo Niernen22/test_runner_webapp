@@ -8,7 +8,10 @@ username = 'sartasnadi'
 password = 'password'
 dsn='rstodsdev1.develop:1521/RDWD'
 
-connection = oracledb.connect(user=username, password=password, dsn=dsn)
+#connection = oracledb.connect(user=username, password=password, dsn=dsn)
+pool = oracledb.create_pool(user=username, password=password, dsn=dsn,
+                            min=1, max=5, increment=1)
+connection = pool.acquire()
 
 @app.route('/favicon.ico')
 def favicon():
@@ -43,7 +46,7 @@ def test_steps(test_id):
 
         return render_template('test_steps.html', test_id=test_id, test_steps=test_steps_data)
     
-    except cx_Oracle.Error as error:
+    except oracledb.Error as error:
         return f"Error retrieving test steps: {error}"
 
 if __name__ == '__main__':
