@@ -4,9 +4,9 @@ import config
 
 app = Flask(__name__)
 
-username = 'sartasnadi'
-password = 'password'
-dsn='rstodsdev1.develop:1521/RDWD'
+username = config.username
+password = config.password
+dsn = config.dsn
 
 #connection = oracledb.connect(user=username, password=password, dsn=dsn)
 pool = oracledb.create_pool(user=username, password=password, dsn=dsn,
