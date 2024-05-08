@@ -1,3 +1,4 @@
+About this Project:
 This is a webapplication in the process, the goal is to make the OracleTableCopy procedure easily accessable, usable and the running processes more seethrough.
 
 At the moment it can: 
@@ -13,7 +14,7 @@ See more information about the procedure in the OracleTableCopy repository.
 
 
 
-How to use this Project
+How to use this Project:
 From your terminal, download the files using
 
 $ git clone https://github.com/Niernen22/Job_steps_webapp.git
