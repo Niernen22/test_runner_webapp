@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Steps for Test ID: {{ test_id }}</title>
+</head>
+<body>
+    <h1>Test Steps for Test ID: {{ test_id }}</h1>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Test ID</th>
+                <th>Step Name</th>
+                <th>Order Number</th>
+                <th>Type</th>
+                <th>SQL Code</th>
+                <th>Target User</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for step in test_steps %}
+            <tr>
+                <td>{{ step[0] }}</td>
+                <td>{{ step[1] }}</td>
+                <td>{{ step[2] }}</td>
+                <td>{{ step[3] }}</td>
+                <td>{{ step[7] }}</td>
+                <td>{{ step[8] }}</td>
+                <td>{{ step[9] }}</td>
+                <td>
+                    <form action="/delete_step" method="post">
+                        <input type="hidden" name="id" value="{{ step[0] }}">
+                        <input type="hidden" name="test_id" value="{{ test_id }}">
+                        <button type="submit">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            <tr>
+                <form action="/add_step" method="post">
+                    <td><input type="text" name="new_id"></td>
+                    <td><input type="text" name="new_test_id"></td>
+                    <td><input type="text" name="new_step_name"></td>
+                    <td><input type="text" name="new_order_number"></td>
+                    <td><input type="text" name="new_type"></td>
+                    <td><input type="text" name="new_sql_code"></td>
+                    <td><input type="text" name="new_target_user"></td>
+                    <td><button type="submit">Add</button></td>
+                </form>                
+            </tr>
+        </tbody>
+    </table>
+
+    <script>
+        document.getElementById('addStepForm').addEventListener('submit', function(event) {
+            event.preventDefault(); 
+            const formData = new FormData(this);
+            fetch('/add_step', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.text();
+            })
+            .then(data => {
+                console.log(data); 
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        });
+    
+        function deleteStep(stepId) {
+            const formData = new FormData();
+            formData.append('id', stepId);
+            fetch('/delete_step', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.text();
+            })
+            .then(data => {
+                console.log(data); 
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        }
+    </script>
+</body>
+</html>
