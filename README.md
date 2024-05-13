@@ -1,15 +1,13 @@
 About this Project:
-This is a webapplication in the process, the goal is to make the OracleTableCopy procedure easily accessable, usable and the running processes more seethrough.
+This is a webapplication in the process, the goal is to let developers make their own test plans and run them independently from system administrators.
 
-At the moment it can: 
-Connect to the Oracle database specified.
-Show the jobs and their statuses (from the table specified in the config file).
-Generate a link to show the belonging job steps (ID, Name, Ordernumber, Status, Start time, End time, Type, SQL code, Target user).
+At the moment the following is available:
+- Main Page: Jobs and their statuses
+- Test Steps for Test ID [..]: Test job's steps
+- Edit Steps: Delete and Add steps for a job (ID, Test ID, Step Name, Order Number, Type, SQL Code, Target User
+- Job Log Details: Job logging (Run ID, Test ID, Test Name, Event, Event Time, Error Message)
+- Job Steps Log Details: Job Steps Logging (Run ID, Step ID, Step Name, Event, Event Time, Output Message, Error Message, Job Name)
 
-Join: 
-Tests:ID = Test_steps:Test_ID
-
-See more information about the procedure in the OracleTableCopy repository.
 
 
 
@@ -22,6 +20,8 @@ $ git clone https://github.com/Niernen22/Job_steps_webapp.git
 Install all dependencies from the requirements.txt file.
 
 $ pip install -r requirements.txt
+
+Open the config.py to add your credentials to the Oracle database (username, password, dns).
 
 Run the main.py file
 
