@@ -32,6 +32,43 @@ def index():
     except oracledb.Error as error:
         return f"Error connecting to Oracle DB: {error}"
 
+
+@app.route('/job_details')
+def job_details():
+    try:
+        connection = pool.acquire()
+        cursor = connection.cursor()
+
+        query = "SELECT * FROM TEST_RUN_LOG ORDER BY RUN_ID DESC"
+        cursor.execute(query)
+        job_details = cursor.fetchall()
+
+        cursor.close()
+
+        return render_template('job_details.html', job_details=job_details)
+
+    except oracledb.Error as error:
+        return f"Error connecting to Oracle DB: {error}"
+
+
+@app.route('/job_steps_details')
+def job_steps_details():
+    try:
+        connection = pool.acquire()
+        cursor = connection.cursor()
+
+        query = "SELECT * FROM STEP_RUN_LOG ORDER BY RUN_ID DESC"
+        cursor.execute(query)
+        job_steps_details = cursor.fetchall()
+
+        cursor.close()
+
+        return render_template('job_steps_details.html', job_steps_details=job_steps_details)
+
+    except oracledb.Error as error:
+        return f"Error connecting to Oracle DB: {error}"
+        
+
 @app.route('/test_steps/<test_id>')
 def test_steps(test_id):
     try:
