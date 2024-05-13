@@ -1,4 +1,5 @@
 from flask import Flask, render_template, abort, request, redirect, url_for
+from threading import Thread
 import oracledb
 import config
 
@@ -86,6 +87,7 @@ def test_steps(test_id):
     except oracledb.Error as error:
         return f"Error retrieving test steps: {error}"
 
+
 @app.route('/edit_steps/<test_id>')
 def edit_steps(test_id):
     try:
@@ -102,6 +104,7 @@ def edit_steps(test_id):
 
     except oracledb.Error as error:
         return f"Error retrieving test steps: {error}"
+
 
 @app.route('/add_step', methods=['POST'])
 def add_step():
@@ -152,9 +155,7 @@ def delete_step():
         return f"Error deleting step: {error}"
 
 
-
-@app.route('/run_test/<test_id>')
-def run_test(test_id):
+def run_test_async(test_id):
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
@@ -164,10 +165,16 @@ def run_test(test_id):
         connection.commit()
         cursor.close()
 
-        return "Test successfully executed!"
+        print("Test successfully executed!")
 
     except oracledb.Error as error:
-        return f"Error running test: {error}"
+        print(f"Error running test: {error}") 
+
+@app.route('/run_test/<test_id>')
+def run_test(test_id):
+    Thread(target=run_test_async, args=(test_id,)).start()
+
+    return redirect(url_for('test_steps', test_id=test_id))
 
 
 if __name__ == '__main__':
