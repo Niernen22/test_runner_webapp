@@ -21,7 +21,7 @@ Install all dependencies from the requirements.txt file.
 
 $ pip install -r requirements.txt
 
-Open the config.py to add your credentials to the Oracle database (username, password, dns).
+Open the config.py to add your credentials (Oracle database username, password, dns).
 
 Run the main.py file
 
