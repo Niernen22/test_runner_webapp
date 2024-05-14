@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Step</title>
+    <style>
+        #generateSQLButton {
+            display: none; /* Hide the button by default */
+        }
+        #sql_code_display {
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h2>Add Step</h2>
+    <form id="stepForm" onsubmit="event.preventDefault()">
+        <label for="step_type">Select Step Type:</label>
+        <select id="step_type" name="step_type" onchange="showParametersForm()">
+            <option value="none">Select Step Type</option>
+            <option value="tablecopy">Table Copy</option>
+            <option value="lm_job">LM Job</option>
+            <option value="stored_procedure">Stored Procedure</option>
+        </select><br><br>
+
+        <div id="parametersForm" style="display: none;">
+            <h3>Enter Parameters for TABLECOPY_PACKAGE.TABLECOPY</h3>
+
+            <label for="source_schema">Source Schema:</label>
+            <select id="source_schema" name="source_schema" onchange="getTablesForSourceSchema(this.value)">
+                {% for username in usernames %}
+                <option value="{{ username }}">{{ username }}</option>
+                {% endfor %}
+            </select><br><br>
+
+            <label for="source_table">Source Table:</label>
+            <select id="source_table" name="source_table"></select><br><br>
+
+            <label for="target_schema">Target Schema:</label>
+            <select id="target_schema" name="target_schema" onchange="getTablesForSchema(this.value)">
+                {% for username in usernames %}
+                <option value="{{ username }}">{{ username }}</option>
+                {% endfor %}
+            </select><br><br>
+
+            <label for="target_table">Target Table:</label>
+            <select id="target_table" name="target_table"></select><br><br>
+
+            <label for="truncate">Truncate (true/false):</label>
+            <select id="truncate" name="truncate">
+                <option value="true">True</option>
+                <option value="false">False</option>
+            </select><br><br>            
+
+            <label for="date">Date:</label>
+            <select id="date" name="date"></select><br><br>
+        </div>
+
+        <button id="generateSQLButton" onclick="generateAndDisplaySQL()">Generate SQL</button>
+
+        <div id="sql_code_display"></div>
+        
+        <input type="hidden" name="new_sql_code" id="new_sql_code" value="">
+        
+        <input type="button" value="Submit" onclick="sendSQLToParent()">
+    </form>
+
+    <script>
+        function showParametersForm() {
+            let stepType = document.getElementById('step_type').value;
+            if (stepType === 'tablecopy') {
+                document.getElementById('parametersForm').style.display = 'block';
+                document.getElementById('generateSQLButton').style.display = 'inline-block'; 
+            } else {
+                document.getElementById('parametersForm').style.display = 'none';
+                document.getElementById('generateSQLButton').style.display = 'none'; 
+            }
+        }
+    
+        function getTablesForSchema(selectedSchema) {
+            var targetTableSelect = document.getElementById('target_table');
+            fetch('/get_tables_for_schema', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ schema: selectedSchema })
+            })
+            .then(response => response.json())
+            .then(data => {
+                targetTableSelect.innerHTML = '';
+                data.forEach(function(table) {
+                    var option = document.createElement('option');
+                    option.value = table;
+                    option.textContent = table;
+                    targetTableSelect.appendChild(option);
+                });
+            })
+            .catch(error => console.error('Error:', error));
+        }
+    
+        function getTablesForSourceSchema(selectedSchema) {
+            var sourceTableSelect = document.getElementById('source_table');
+            fetch('/get_tables_for_schema', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ schema: selectedSchema })
+            })
+            .then(response => response.json())
+            .then(data => {
+                sourceTableSelect.innerHTML = '';
+                data.forEach(function(table) {
+                    var option = document.createElement('option');
+                    option.value = table;
+                    option.textContent = table;
+                    sourceTableSelect.appendChild(option);
+                });
+            })
+            .catch(error => console.error('Error:', error));
+        }
+    
+        document.addEventListener('DOMContentLoaded', function() {
+            fetch('/get_workdays', {
+                method: 'GET',
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                var dateSelect = document.getElementById('date');
+                data.forEach(function(day) {
+                    var option = document.createElement('option');
+                    option.value = day;
+                    option.textContent = day;
+                    dateSelect.appendChild(option);
+                });
+            })
+            .catch(error => console.error('Error:', error));
+        });
+    
+        function generateSQL() {
+            var stepType = document.getElementById('step_type').value;
+            var sourceSchema = document.getElementById('source_schema').value;
+            var sourceTable = document.getElementById('source_table').value;
+            var targetSchema = document.getElementById('target_schema').value;
+            var targetTable = document.getElementById('target_table').value;
+            var truncate = document.getElementById('truncate').value;
+            var chosenDate = document.getElementById('date').value;
+    
+            var sqlCode = "BEGIN ";
+            sqlCode += stepType.toUpperCase() + "_PACKAGE." + stepType.toUpperCase() + "(";
+            sqlCode += "'" + sourceSchema + "', ";
+            sqlCode += "'" + sourceTable + "', ";
+            sqlCode += "'" + targetSchema + "', ";
+            sqlCode += "'" + targetTable + "', ";
+            sqlCode += "'" + truncate + "', ";
+            sqlCode += "TO_DATE('" + chosenDate + "','yyyy-mm-dd')); END;";
+    
+            return sqlCode;
+        }
+        
+        function generateAndDisplaySQL() {
+            var sqlCode = generateSQL(); 
+            console.log(sqlCode); 
+            document.getElementById('sql_code_display').innerText = sqlCode; 
+        }
+        
+        function sendSQLToParent() {
+            var sqlCode = document.getElementById('sql_code_display').innerText;
+            window.opener.receiveSQLFromPopup(sqlCode); 
+            window.close(); 
+        }
+
+    </script>
+    
+</body>
+</html>
