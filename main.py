@@ -101,9 +101,13 @@ def edit_steps(test_id):
         cursor.execute(query, test_id=test_id)
         test_steps_data = cursor.fetchall()
 
+        sql = "SELECT USERNAME FROM DBA_USERS"
+        cursor.execute(sql)
+        usernames = [row[0] for row in cursor.fetchall()]
+
         cursor.close()
 
-        return render_template('edit_steps.html', test_id=test_id, test_steps=test_steps_data)
+        return render_template('edit_steps.html', test_id=test_id, test_steps=test_steps_data, usernames=usernames)
 
     except oracledb.Error as error:
         return f"Error retrieving test steps: {error}"
@@ -191,7 +195,7 @@ def get_workdays():
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
-        sql = "SELECT DISTINCT(TND) FROM STA.TR_DATE WHERE WORK_DAY = 'Y'"
+        sql = "SELECT DISTINCT(T_DATE) FROM STA.TR_DATE WHERE WORK_DAY = 'Y'"
         cursor.execute(sql)
         workdays = [row[0].strftime("%Y-%m-%d") for row in cursor.fetchall()]
         cursor.close()
