@@ -1,5 +1,7 @@
 from flask import Flask, render_template, abort, request, redirect, url_for
+from datetime import datetime
 from threading import Thread
+import json
 import oracledb
 import config
 
@@ -11,6 +13,7 @@ dsn = config.dsn
 
 pool = oracledb.create_pool(user=username, password=password, dsn=dsn,
                             min=1, max=5, increment=1)
+
 
 @app.route('/favicon.ico')
 def favicon():
@@ -153,6 +156,50 @@ def delete_step():
 
     except oracledb.Error as error:
         return f"Error deleting step: {error}"
+
+@app.route('/add', methods=['GET'])
+def add():
+    try:
+        connection = pool.acquire()
+        cursor = connection.cursor()
+        sql = "SELECT USERNAME FROM DBA_USERS"
+        cursor.execute(sql)
+        usernames = [row[0] for row in cursor.fetchall()]
+        cursor.close()
+        pool.release(connection)
+        return render_template('add.html', usernames=usernames)
+    except Exception as e:
+        return render_template('add.html', error=str(e))
+
+@app.route('/get_tables_for_schema', methods=['POST'])
+def get_tables_for_schema():
+    selected_schema = request.json['schema']
+    try:
+        connection = pool.acquire()
+        cursor = connection.cursor()
+        sql = "SELECT table_name FROM all_tables WHERE owner = :schema"
+        cursor.execute(sql, {'schema': selected_schema})
+        table_names = [row[0] for row in cursor.fetchall()]
+        cursor.close()
+        pool.release(connection)
+        return json.dumps(table_names)
+    except Exception as e:
+        return json.dumps({'error': str(e)})
+
+@app.route('/get_workdays', methods=['GET'])
+def get_workdays():
+    try:
+        connection = pool.acquire()
+        cursor = connection.cursor()
+        sql = "SELECT DISTINCT(TND) FROM STA.TR_DATE WHERE WORK_DAY = 'Y'"
+        cursor.execute(sql)
+        workdays = [row[0].strftime("%Y-%m-%d") for row in cursor.fetchall()]
+        cursor.close()
+        pool.release(connection)
+        return json.dumps(workdays)
+    except Exception as e:
+        return json.dumps({'error': str(e)})
+
 
 
 def run_test_async(test_id):
