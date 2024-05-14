@@ -41,13 +41,16 @@
             </tr>
             {% endfor %}
             <tr>
-                <form action="/add_step" method="post">
+                <form id="addStepForm">
                     <td><input type="text" name="new_id"></td>
                     <td><input type="text" name="new_test_id"></td>
                     <td><input type="text" name="new_step_name"></td>
                     <td><input type="text" name="new_order_number"></td>
                     <td><input type="text" name="new_type"></td>
-                    <td><input type="text" name="new_sql_code"></td>
+                    <td>
+                        <button type="button" onclick="openPopup()">Add SQL</button>
+                        <input type="text" name="new_sql_code" id="new_sql_code" value="">
+                    </td>
                     <td><input type="text" name="new_target_user"></td>
                     <td><button type="submit">Add</button></td>
                 </form>                
@@ -71,6 +74,7 @@
             })
             .then(data => {
                 console.log(data); 
+                window.location.reload();
             })
             .catch(error => {
                 console.error('Error:', error);
@@ -97,6 +101,25 @@
                 console.error('Error:', error);
             });
         }
+
+        function openPopup() {
+            var left = (screen.width - 800) / 2;
+            var top = (screen.height - 600) / 2;
+            var popup = window.open('/add', 'Pop-up Window', 'width=800,height=600,left=' + left + ',top=' + top);
+
+            var sqlCode = generateSQL(); 
+            var sqlDisplayDiv = popup.document.getElementById('sql_code_display'); 
+            if (sqlDisplayDiv) {
+                sqlDisplayDiv.innerText = sqlCode; 
+            } else {
+                console.error('Error: Unable to find sql_code_display div in popup window');
+            }
+        }
+
+        function receiveSQLFromPopup(sqlCode) {
+            document.getElementById('new_sql_code').value = sqlCode; 
+        }
+
     </script>
 </body>
 </html>
