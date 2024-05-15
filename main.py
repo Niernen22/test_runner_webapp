@@ -61,7 +61,7 @@ def job_steps_details():
         connection = pool.acquire()
         cursor = connection.cursor()
 
-        query = "SELECT * FROM STEP_RUN_LOG ORDER BY RUN_ID DESC"
+        query = "SELECT * FROM STEP_RUN_LOG ORDER BY RUN_ID DESC, STEP_ID DESC"
         cursor.execute(query)
         job_steps_details = cursor.fetchall()
 
@@ -160,20 +160,6 @@ def delete_step():
 
     except oracledb.Error as error:
         return f"Error deleting step: {error}"
-
-@app.route('/add', methods=['GET'])
-def add():
-    try:
-        connection = pool.acquire()
-        cursor = connection.cursor()
-        sql = "SELECT USERNAME FROM DBA_USERS"
-        cursor.execute(sql)
-        usernames = [row[0] for row in cursor.fetchall()]
-        cursor.close()
-        pool.release(connection)
-        return render_template('add.html', usernames=usernames)
-    except Exception as e:
-        return render_template('add.html', error=str(e))
 
 @app.route('/get_tables_for_schema', methods=['POST'])
 def get_tables_for_schema():
