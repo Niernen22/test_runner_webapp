@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Test Steps for Test ID: {{ test_id }}</title>
+    <title>Edit Test Steps for Test ID: {{ test_id }}</title>
     <style>
         .modal {
             display: none;
@@ -51,8 +51,9 @@
     </style>
 </head>
 <body>
-    <h1>Test Steps for Test ID: {{ test_id }}</h1>
+    <h1>Edit Test Steps for Test ID: {{ test_id }}</h1>
     <a href="{{ url_for('index') }}"><button>Main Page</button></a>
+    <a href="{{ url_for('test_steps', test_id=test_id) }}"><button>Finish Editing</button></a>
     <table border="1">
         <thead>
             <tr>
@@ -132,7 +133,7 @@
                     <select id="source_table" name="source_table"></select><br><br>
         
                     <label for="target_schema">Target Schema:</label>
-                    <select id="target_schema" name="target_schema" onchange="getTablesForSchema(this.value)">
+                    <select id="target_schema" name="target_schema" onchange="getTablesForTargetSchema(this.value)">
                         {% for username in usernames %}
                         <option value="{{ username }}">{{ username }}</option>
                         {% endfor %}
@@ -175,7 +176,7 @@
             }
         }
     
-        function getTablesForSchema(selectedSchema) {
+        function getTablesForTargetSchema(selectedSchema) {
             var targetTableSelect = document.getElementById('target_table');
             fetch('/get_tables_for_schema', {
                 method: 'POST',
