@@ -182,10 +182,10 @@
                     <div id="FunctionOrProcedureForm" style="display: none;">
                         <h3>Enter Parameters for Stored Function or Procedure</h3>
 
-                        <label for="func_proc_name">Stored Function or Procedure Name:</label>
-                        <select id="func_proc_name" name="func_proc_name" onchange="getParametersForFunctionOrProcedure(this.value)">
-                            {% for func_proc_name in func_proc_names %}
-                            <option value="{{ func_proc_name }}">{{ func_proc_name }}</option>
+                        <label for="storedobject_name">Stored Function or Procedure Name:</label>
+                        <select id="storedobject_name" name="storedobject_name" onchange="getParametersForStoredProcedure(this.value)">
+                            {% for storedobject_name in storedobject_names %}
+                            <option value="{{ storedobject_name }}">{{ storedobject_name }}</option>
                             {% endfor %}
                         </select><br><br>
 
@@ -196,6 +196,16 @@
 
                     <div id="PackageForm" style="display: none;">
                         <h3>Enter Parameters for Stored Package</h3>
+
+                        <label for="storedobject_name">Stored Package Name:</label>
+                        <select id="storedobject_name" name="storedobject_name" onchange="getParametersForStoredProcedure(this.value)">
+                            {% for storedobject_name in storedobject_names %}
+                            <option value="{{ storedobject_name }}">{{ storedobject_name }}</option>
+                            {% endfor %}
+                        </select><br><br>
+
+                        <label for="parameters">Parameters:</label>
+                        <div id="parameters"></div><br><br>
 
                     </div>
 
@@ -213,8 +223,7 @@
         </div>
     </div>
     
-
-    <script>     
+    <script>
 
         function showParametersForm() {
             let selectedType = document.getElementById('step_type').value;
@@ -259,13 +268,14 @@
             }
         }
 
-        function getParametersForFunctionOrProcedure(selectedFuncProc) {
-            fetch('/get_parameters_details_for_funcproc', {
+
+        function getParametersForStoredProcedure(selectedStoredObjectName) {
+            fetch('/get_parameters_for_stored_procedure', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ funcproc: selectedFuncProc })
+                body: JSON.stringify({ storedobject_name: selectedStoredObjectName })
             })
             .then(response => response.json())
             .then(data => {
@@ -282,8 +292,8 @@
             })
             .catch(error => console.error('Error:', error));
         }
-
     
+
         function getTablesForTargetSchema(selectedSchema) {
             var targetTableSelect = document.getElementById('target_table');
             fetch('/get_tables_for_schema', {
@@ -442,6 +452,7 @@
             }
         }
 
+
         function generateAndDisplaySQL() {
             var sqlCode = generateSQL(); 
             console.log(sqlCode); 
@@ -450,15 +461,16 @@
             sqlDisplayDiv.style.display = 'block';
         }
 
+
         function generateSQLSP() {
             var selectedType = document.getElementById('storedprocedure_type').value;
             if (selectedType === 'Function_or_Procedure') {
-                var selectedFuncProc = document.getElementById('func_proc_name').value;
+                var selectedStoredObjectName = document.getElementById('storedobject_name').value;
                 var parameterValues = Array.from(document.getElementById('parameters').getElementsByTagName('input')).map(function(input) {
                 return input.value;
                 }).join(', ');
         
-                var sqlCode = "BEGIN " + selectedFuncProc + "(" + parameterValues + "); END;";
+                var sqlCode = "BEGIN " + selectedStoredObjectName + "(" + parameterValues + "); END;";
                 
                 return sqlCode;
 
@@ -483,6 +495,7 @@
             sqlDisplayDiv.style.display = 'block';
         }
         
+
         function sendSQLToParent() {
             var sqlCode = document.getElementById('sql_code_display').innerText;
             var selectedType = document.getElementById('step_type').value;
@@ -509,7 +522,6 @@
                     modal.style.display = "none";
                 }
             }
-
             var sqlCode = generateSQL();
             var sqlDisplayDiv = document.getElementById('sql_code_display'); 
             if (sqlDisplayDiv) {
