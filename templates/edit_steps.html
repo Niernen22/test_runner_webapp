@@ -104,9 +104,7 @@
         </tbody>
     </table>
 
-    <!-- The Modal -->
     <div id="myModal" class="modal">
-        <!-- Modal content -->
         <div class="modal-content">
             <span class="close">&times;</span>
             <h2>Add Step</h2>
@@ -151,9 +149,28 @@
                     <label for="date">Date:</label>
                     <select id="date" name="date"></select><br><br>
                 </div>
+
+
+                <div id="LMparametersForm" style="display: none;">
+                    <h3>Enter Parameters for LM_JOB</h3>
+                
+                    <label for="module">Select Module:</label>
+                    <select id="module" name="module" onchange="getTypesForModule(this.value); getNamesForModule(this.value)">
+                        {% for module in modules %}
+                        <option value="{{ module }}">{{ module }}</option>
+                        {% endfor %}
+                    </select><br><br>
+
+                    <label for="type">Type:</label>
+                    <span id="type" name="type"></span><br><br>
+
+                    <label for="name">Select Name:</label>
+                    <select id="name" name="name"></select><br><br>
+                </div>
+
         
                 <button id="generateSQLButton" onclick="generateAndDisplaySQL()">Generate SQL</button>
-        
+
                 <div id="sql_code_display"></div>
                 
                 <input type="hidden" name="new_sql_code" id="new_sql_code" value="">
@@ -162,19 +179,27 @@
             </form>
         </div>
     </div>
+    
 
     <script>     
 
         function showParametersForm() {
-            let stepType = document.getElementById('step_type').value;
-            if (stepType === 'TABLECOPY') {
+            let selectedType = document.getElementById('step_type').value;
+            if (selectedType === 'TABLECOPY') {
                 document.getElementById('parametersForm').style.display = 'block';
                 document.getElementById('generateSQLButton').style.display = 'inline-block'; 
+                document.getElementById('LMparametersForm').style.display = 'none';
+            } else if (selectedType === 'LM_JOB') {
+                document.getElementById('parametersForm').style.display = 'none';
+                document.getElementById('generateSQLButton').style.display = 'inline-block'; 
+                document.getElementById('LMparametersForm').style.display = 'block';
             } else {
                 document.getElementById('parametersForm').style.display = 'none';
                 document.getElementById('generateSQLButton').style.display = 'none'; 
+                document.getElementById('LMparametersForm').style.display = 'none';
             }
         }
+
     
         function getTablesForTargetSchema(selectedSchema) {
             var targetTableSelect = document.getElementById('target_table');
@@ -198,6 +223,7 @@
             .catch(error => console.error('Error:', error));
         }
     
+
         function getTablesForSourceSchema(selectedSchema) {
             var sourceTableSelect = document.getElementById('source_table');
             fetch('/get_tables_for_schema', {
@@ -219,6 +245,7 @@
             })
             .catch(error => console.error('Error:', error));
         }
+
     
         document.addEventListener('DOMContentLoaded', function() {
             fetch('/get_workdays', {
@@ -241,28 +268,97 @@
             })
             .catch(error => console.error('Error:', error));
         });
-    
-        function generateSQL() {
-            var stepType = document.getElementById('step_type').value;
-            var sourceSchema = document.getElementById('source_schema').value;
-            var sourceTable = document.getElementById('source_table').value;
-            var targetSchema = document.getElementById('target_schema').value;
-            var targetTable = document.getElementById('target_table').value;
-            var truncate = document.getElementById('truncate').value;
-            var chosenDate = document.getElementById('date').value;
-    
-            var sqlCode = "BEGIN ";
-            sqlCode += stepType.toUpperCase() + "_PACKAGE." + stepType.toUpperCase() + "(";
-            sqlCode += "'" + sourceSchema + "', ";
-            sqlCode += "'" + sourceTable + "', ";
-            sqlCode += "'" + targetSchema + "', ";
-            sqlCode += "'" + targetTable + "', ";
-            sqlCode += "'" + truncate + "', ";
-            sqlCode += "TO_DATE('" + chosenDate + "','yyyy-mm-dd')); END;";
-    
-            return sqlCode;
+
+
+        function getNamesForModule(selectedModule) {
+            var nameSelect = document.getElementById('name');
+            fetch('/get_names_for_module', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ module: selectedModule })
+            })
+            .then(response => response.json())
+            .then(data => {
+                nameSelect.innerHTML = '';
+                data.forEach(function(name) {
+                    var option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name;
+                    nameSelect.appendChild(option);
+                });
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+
+        function getTypesForModule(selectedModule) {
+            var typeSelect = document.getElementById('type');
+            fetch('/get_types_for_module', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ module: selectedModule })
+            })
+            .then(response => response.json())
+            .then(data => {
+                typeSelect.innerHTML = '';
+                data.forEach(function(type) {
+                    var option = document.createElement('option');
+                    option.value = type;
+                    option.textContent = type;
+                    typeSelect.appendChild(option);
+                });
+            })
+            .catch(error => console.error('Error:', error));
         }
         
+    
+        function generateSQL() {
+            var selectedType = document.getElementById('step_type').value;
+            if (selectedType === 'TABLECOPY') {
+                var sourceSchema = document.getElementById('source_schema').value;
+                var sourceTable = document.getElementById('source_table').value;
+                var targetSchema = document.getElementById('target_schema').value;
+                var targetTable = document.getElementById('target_table').value;
+                var truncate = document.getElementById('truncate').value;
+                var chosenDate = document.getElementById('date').value;
+                
+                var sqlCode = "BEGIN ";
+                sqlCode += "TABLECOPY_PACKAGE.TABLECOPY(";
+                sqlCode += "'" + sourceSchema + "', ";
+                sqlCode += "'" + sourceTable + "', ";
+                sqlCode += "'" + targetSchema + "', ";
+                sqlCode += "'" + targetTable + "', ";
+                sqlCode += "'" + truncate + "', ";
+                sqlCode += "TO_DATE('" + chosenDate + "','yyyy-mm-dd')); END;";
+                
+                return sqlCode;
+
+            } else if (selectedType === 'LM_JOB') {
+                var type = document.getElementById('type').value;
+                var module = document.getElementById('module').value;
+                var name = document.getElementById('name').value;
+                
+                console.log("LM_JOB parameters:", { type, module, name });
+
+                var sqlCode = "declare ";
+                sqlCode += "p_result varchar2(4000); ";
+                sqlCode += "p_err_code varchar2(4000); ";
+                sqlCode += "p_output clob; ";
+                sqlCode += "begin ";
+                sqlCode += "lm." + type + ".execute(1, '" + module + "', '" + name + "', p_result, p_err_code, p_output, false); ";
+                sqlCode += "dbms_output.put_line(p_result || ' - ' || p_err_code); ";
+                sqlCode += "dbms_output.put_line(p_output); ";
+                sqlCode += "end; ";
+                
+                console.log("Generated SQL for LM_JOB:", sqlCode);
+                return sqlCode;
+            }
+        }
+
         function generateAndDisplaySQL() {
             var sqlCode = generateSQL(); 
             console.log(sqlCode); 
@@ -270,7 +366,6 @@
             sqlDisplayDiv.innerText = sqlCode;
             sqlDisplayDiv.style.display = 'block';
         }
-
         
         function sendSQLToParent() {
             var sqlCode = document.getElementById('sql_code_display').innerText;
@@ -280,8 +375,6 @@
         
             document.getElementById("myModal").style.display = "none";
         }
-
-
 
 
         function openPopup() {
@@ -301,7 +394,7 @@
                 }
             }
 
-            var sqlCode = generateSQL(); 
+            var sqlCode = generateSQL();
             var sqlDisplayDiv = document.getElementById('sql_code_display'); 
             if (sqlDisplayDiv) {
                 sqlDisplayDiv.innerText = sqlCode; 
