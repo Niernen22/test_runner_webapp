@@ -168,6 +168,39 @@
                     <select id="name" name="name"></select><br><br>
                 </div>
 
+
+                <div id="StoredProcedureForm" style="display: none;">
+                    <h3>Enter Parameters for Stored Procedure</h3>
+
+                    <label for="storedprocedure_type">Select Stored Procedure Type:</label>
+                    <select id="storedprocedure_type" name="storedprocedure_type" onchange="showSPParametersForm()">
+                        <option value="none">Select Stored Procedure Type</option>
+                        <option value="Function_or_Procedure">Function or Procedure</option>
+                        <option value="Package">Package</option>
+                    </select><br><br>
+
+                    <div id="FunctionOrProcedureForm" style="display: none;">
+                        <h3>Enter Parameters for Stored Function or Procedure</h3>
+
+                        <label for="func_proc_name">Stored Function or Procedure Name:</label>
+                        <select id="func_proc_name" name="func_proc_name" onchange="getParametersForFunctionOrProcedure(this.value)">
+                            {% for func_proc_name in func_proc_names %}
+                            <option value="{{ func_proc_name }}">{{ func_proc_name }}</option>
+                            {% endfor %}
+                        </select><br><br>
+
+                        <label for="parameters">Parameters:</label>
+                        <div id="parameters"></div><br><br>
+
+                    </div>
+
+                    <div id="PackageForm" style="display: none;">
+                        <h3>Enter Parameters for Stored Package</h3>
+
+                    </div>
+
+                    <button id="generateSQLButtonSP" onclick="generateAndDisplaySQLSP()">Generate SQL</button>
+                </div>
         
                 <button id="generateSQLButton" onclick="generateAndDisplaySQL()">Generate SQL</button>
 
@@ -189,15 +222,65 @@
                 document.getElementById('parametersForm').style.display = 'block';
                 document.getElementById('generateSQLButton').style.display = 'inline-block'; 
                 document.getElementById('LMparametersForm').style.display = 'none';
+                document.getElementById('StoredProcedureForm').style.display = 'none';
             } else if (selectedType === 'LM_JOB') {
                 document.getElementById('parametersForm').style.display = 'none';
                 document.getElementById('generateSQLButton').style.display = 'inline-block'; 
                 document.getElementById('LMparametersForm').style.display = 'block';
+                document.getElementById('StoredProcedureForm').style.display = 'none';
+            } else if (selectedType === 'STORED_PROCEDURE') {
+                document.getElementById('parametersForm').style.display = 'none';
+                document.getElementById('generateSQLButton').style.display = 'none'; 
+                document.getElementById('LMparametersForm').style.display = 'none';
+                document.getElementById('StoredProcedureForm').style.display = 'block';
             } else {
                 document.getElementById('parametersForm').style.display = 'none';
                 document.getElementById('generateSQLButton').style.display = 'none'; 
                 document.getElementById('LMparametersForm').style.display = 'none';
+                document.getElementById('StoredProcedureForm').style.display = 'none';
             }
+        }
+
+
+        function showSPParametersForm() {
+            let selectedType = document.getElementById('storedprocedure_type').value;
+            if (selectedType === 'Function_or_Procedure') {
+                document.getElementById('FunctionOrProcedureForm').style.display = 'block';
+                document.getElementById('generateSQLButtonSP').style.display = 'inline-block'; 
+                document.getElementById('PackageForm').style.display = 'none';
+            } else if (selectedType === 'Package') {
+                document.getElementById('FunctionOrProcedureForm').style.display = 'none';
+                document.getElementById('generateSQLButtonSP').style.display = 'inline-block'; 
+                document.getElementById('PackageForm').style.display = 'block';
+            } else {
+                document.getElementById('FunctionOrProcedureForm').style.display = 'none';
+                document.getElementById('generateSQLButtonSP').style.display = 'none'; 
+                document.getElementById('PackageForm').style.display = 'none';
+            }
+        }
+
+        function getParametersForFunctionOrProcedure(selectedFuncProc) {
+            fetch('/get_parameters_details_for_funcproc', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ funcproc: selectedFuncProc })
+            })
+            .then(response => response.json())
+            .then(data => {
+                var parametersDiv = document.getElementById('parameters');
+                parametersDiv.innerHTML = '';
+                data.forEach(function(parameter) {
+                    var parameterInput = document.createElement('input');
+                    parameterInput.type = 'text';
+                    parameterInput.value = parameter.default_value;
+                    parameterInput.placeholder = parameter.argument_name;
+                    parameterInput.setAttribute('name', parameter.argument_name);
+                    parametersDiv.appendChild(parameterInput);
+                });
+            })
+            .catch(error => console.error('Error:', error));
         }
 
     
@@ -361,6 +444,39 @@
 
         function generateAndDisplaySQL() {
             var sqlCode = generateSQL(); 
+            console.log(sqlCode); 
+            var sqlDisplayDiv = document.getElementById('sql_code_display');
+            sqlDisplayDiv.innerText = sqlCode;
+            sqlDisplayDiv.style.display = 'block';
+        }
+
+        function generateSQLSP() {
+            var selectedType = document.getElementById('storedprocedure_type').value;
+            if (selectedType === 'Function_or_Procedure') {
+                var selectedFuncProc = document.getElementById('func_proc_name').value;
+                var parameterValues = Array.from(document.getElementById('parameters').getElementsByTagName('input')).map(function(input) {
+                return input.value;
+                }).join(', ');
+        
+                var sqlCode = "BEGIN " + selectedFuncProc + "(" + parameterValues + "); END;";
+                
+                return sqlCode;
+
+            } else if (selectedType === 'Package') {
+                var type = document.getElementById('type').value;
+                
+                console.log("LM_JOB parameters:", { type, module, name });
+
+                var sqlCode = "declare ";
+                
+                console.log("Generated SQL for Stored Procedure:", sqlCode);
+                return sqlCode;
+            }
+        }
+
+
+        function generateAndDisplaySQLSP() {
+            var sqlCode = generateSQLSP(); 
             console.log(sqlCode); 
             var sqlDisplayDiv = document.getElementById('sql_code_display');
             sqlDisplayDiv.innerText = sqlCode;
