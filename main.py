@@ -111,11 +111,11 @@ def edit_steps(test_id):
 
         sql = "SELECT DISTINCT(OBJECT_NAME) FROM DBA_PROCEDURES"
         cursor.execute(sql)
-        func_proc_names = [row[0] for row in cursor.fetchall()]
+        storedobject_names = [row[0] for row in cursor.fetchall()]
 
         cursor.close()
 
-        return render_template('edit_steps.html', test_id=test_id, test_steps=test_steps_data, usernames=usernames, modules=modules, func_proc_names=func_proc_names)
+        return render_template('edit_steps.html', test_id=test_id, test_steps=test_steps_data, usernames=usernames, modules=modules, storedobject_names=storedobject_names)
 
     except oracledb.Error as error:
         return f"Error retrieving test steps: {error}"
@@ -186,14 +186,14 @@ def get_tables_for_schema():
         return json.dumps({'error': str(e)})
 
 
-@app.route('/get_parameters_details_for_funcproc', methods=['POST'])
-def get_parameters_details_for_funcproc():
-    selected_funcproc = request.json['funcproc']
+@app.route('/get_parameters_for_stored_procedure', methods=['POST'])
+def get_parameters_for_stored_procedure():
+    selectedStoredObjectName = request.json['storedobject_name']
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
-        sql = "SELECT argument_name, data_type, defaulted, default_value FROM dba_arguments WHERE IN_OUT = 'IN' AND object_name = :funcproc"
-        cursor.execute(sql, {'funcproc': selected_funcproc})
+        sql = "SELECT argument_name, data_type, defaulted, default_value FROM dba_arguments WHERE IN_OUT = 'IN' AND object_name = :storedobject_name"
+        cursor.execute(sql, {'storedobject_name': selectedStoredObjectName})
         parameter_details = [{'argument_name': row[0], 'data_type': row[1], 'defaulted': row[2], 'default_value': row[3]} for row in cursor.fetchall()]
         cursor.close()
         pool.release(connection)
