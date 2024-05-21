@@ -105,9 +105,13 @@ def edit_steps(test_id):
         cursor.execute(sql)
         usernames = [row[0] for row in cursor.fetchall()]
 
+        sql = "SELECT MODULE FROM LM.INV_JOBS"
+        cursor.execute(sql)
+        modules = [row[0] for row in cursor.fetchall()]
+
         cursor.close()
 
-        return render_template('edit_steps.html', test_id=test_id, test_steps=test_steps_data, usernames=usernames)
+        return render_template('edit_steps.html', test_id=test_id, test_steps=test_steps_data, usernames=usernames, modules=modules)
 
     except oracledb.Error as error:
         return f"Error retrieving test steps: {error}"
@@ -161,6 +165,7 @@ def delete_step():
     except oracledb.Error as error:
         return f"Error deleting step: {error}"
 
+
 @app.route('/get_tables_for_schema', methods=['POST'])
 def get_tables_for_schema():
     selected_schema = request.json['schema']
@@ -176,6 +181,7 @@ def get_tables_for_schema():
     except Exception as e:
         return json.dumps({'error': str(e)})
 
+
 @app.route('/get_workdays', methods=['GET'])
 def get_workdays():
     try:
@@ -190,6 +196,37 @@ def get_workdays():
     except Exception as e:
         return json.dumps({'error': str(e)})
 
+
+@app.route('/get_names_for_module', methods=['POST'])
+def get_names_for_module():
+    selected_module = request.json['module']
+    try:
+        connection = pool.acquire()
+        cursor = connection.cursor()
+        sql = "SELECT NAME FROM LM.INV_JOBS WHERE MODULE = :module"
+        cursor.execute(sql, {'module': selected_module})
+        names = [row[0] for row in cursor.fetchall()]
+        cursor.close()
+        pool.release(connection)
+        return json.dumps(names)
+    except Exception as e:
+        return json.dumps({'error': str(e)})
+
+
+@app.route('/get_types_for_module', methods=['POST'])
+def get_types_for_module():
+    selected_module = request.json['module']
+    try:
+        connection = pool.acquire()
+        cursor = connection.cursor()
+        sql = "SELECT TYPE FROM LM.INV_MODULE WHERE MODULE = :module"
+        cursor.execute(sql, {'module': selected_module})
+        types = [row[0] for row in cursor.fetchall()]
+        cursor.close()
+        pool.release(connection)
+        return json.dumps(types)
+    except Exception as e:
+        return json.dumps({'error': str(e)})
 
 
 def run_test_async(test_id):
