@@ -182,12 +182,20 @@
                     <div id="FunctionOrProcedureForm" style="display: none;">
                         <h3>Enter Parameters for Stored Function or Procedure</h3>
 
+                        <label for="procedures_schema">Schema:</label>
+                        <select id="procedures_schema" name="procedures_schema" onchange="getProceduresForSchema(this.value)">
+                            {% for procedures_schema in procedures_schemas %}
+                            <option value="{{ procedures_schema }}">{{ procedures_schema }}</option>
+                            {% endfor %}
+                        </select><br><br>
+
                         <label for="storedobject_name">Stored Function or Procedure Name:</label>
                         <select id="storedobject_name" name="storedobject_name" onchange="getParametersForStoredProcedure(this.value)">
                             {% for storedobject_name in storedobject_names %}
                             <option value="{{ storedobject_name }}">{{ storedobject_name }}</option>
                             {% endfor %}
                         </select><br><br>
+
 
                         <label for="parameters">Parameters:</label>
                         <div id="parameters"></div><br><br>
@@ -196,18 +204,32 @@
 
                     <div id="PackageForm" style="display: none;">
                         <h3>Enter Parameters for Stored Package</h3>
-
-                        <label for="storedobject_name">Stored Package Name:</label>
-                        <select id="storedobject_name" name="storedobject_name" onchange="getParametersForStoredProcedure(this.value)">
+                    
+                        <label for="procedures_schema">Schema:</label>
+                        <select id="procedures_schema_package" name="procedures_schema" onchange="getPackagesForSchema(this.value)">
+                            {% for procedures_schema in procedures_schemas %}
+                            <option value="{{ procedures_schema }}">{{ procedures_schema }}</option>
+                            {% endfor %}
+                        </select><br><br>
+                    
+                        <label for="storedpackage_name">Stored Package Name:</label>
+                        <select id="storedpackage_name" name="storedpackage_name" onchange="getProceduresForPackage(this.value, document.getElementById('procedures_schema_package').value)">
+                            {% for storedpackage_name in storedpackage_names %}
+                            <option value="{{ storedpackage_name }}">{{ storedpackage_name }}</option>
+                            {% endfor %}
+                        </select><br><br>
+                    
+                        <label for="storedobject_name">Stored Package's Function or Procedure Name:</label>
+                        <select id="storedobject_name_package" name="storedobject_name" onchange="getParametersForStoredProcedureInPackage(this.value, document.getElementById('procedures_schema_package').value, document.getElementById('storedpackage_name').value)">
                             {% for storedobject_name in storedobject_names %}
                             <option value="{{ storedobject_name }}">{{ storedobject_name }}</option>
                             {% endfor %}
                         </select><br><br>
-
-                        <label for="parameters">Parameters:</label>
-                        <div id="parameters"></div><br><br>
-
+                    
+                        <label for="parameters_package">Parameters:</label>
+                        <div id="parameters_package"></div><br><br>
                     </div>
+                    
 
                     <button id="generateSQLButtonSP" onclick="generateAndDisplaySQLSP()">Generate SQL</button>
                 </div>
@@ -269,6 +291,29 @@
         }
 
 
+        function getProceduresForSchema(selectedSchema) {
+            var storedObjectSelect = document.getElementById('storedobject_name');
+            fetch('/get_procedures_for_schema', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ schema: selectedSchema })
+            })
+            .then(response => response.json())
+            .then(data => {
+                storedObjectSelect.innerHTML = '';
+                data.forEach(function(procedure) {
+                    var option = document.createElement('option');
+                    option.value = procedure;
+                    option.textContent = procedure;
+                    storedObjectSelect.appendChild(option);
+                });
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+
         function getParametersForStoredProcedure(selectedStoredObjectName) {
             fetch('/get_parameters_for_stored_procedure', {
                 method: 'POST',
@@ -293,6 +338,79 @@
             .catch(error => console.error('Error:', error));
         }
     
+
+
+        function getParametersForStoredProcedureInPackage(selectedStoredObjectName, selectedSchema, selectedPackage) {
+            fetch('/get_parameters_for_stored_procedure_in_package', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ storedobject_name: selectedStoredObjectName, schema: selectedSchema, package_name: selectedPackage })
+            })
+            .then(response => response.json())
+            .then(data => {
+                var parametersDiv = document.getElementById('parameters_package');
+                parametersDiv.innerHTML = '';
+                data.forEach(function(parameter) {
+                    var parameterInput = document.createElement('input');
+                    parameterInput.type = 'text';
+                    parameterInput.value = parameter.default_value;
+                    parameterInput.placeholder = parameter.argument_name;
+                    parameterInput.setAttribute('name', parameter.argument_name);
+                    parametersDiv.appendChild(parameterInput);
+                });
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        
+
+        function getPackagesForSchema(selectedSchema) {
+            var storedPackageSelect = document.getElementById('storedpackage_name');
+            fetch('/get_packages_for_schema', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ schema: selectedSchema })
+            })
+            .then(response => response.json())
+            .then(data => {
+                storedPackageSelect.innerHTML = '';
+                data.forEach(function(package) {
+                    var option = document.createElement('option');
+                    option.value = package;
+                    option.textContent = package;
+                    storedPackageSelect.appendChild(option);
+                });
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        
+        function getProceduresForPackage(selectedPackage, selectedSchema) {
+            var storedObjectSelect = document.getElementById('storedobject_name_package');
+            fetch('/get_procedures_for_package', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ schema: selectedSchema, package: selectedPackage })
+            })
+            .then(response => response.json())
+            .then(data => {
+                storedObjectSelect.innerHTML = '';
+                data.forEach(function(procedure) {
+                    var option = document.createElement('option');
+                    option.value = procedure;
+                    option.textContent = procedure;
+                    storedObjectSelect.appendChild(option);
+                });
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
 
         function getTablesForTargetSchema(selectedSchema) {
             var targetTableSelect = document.getElementById('target_table');
