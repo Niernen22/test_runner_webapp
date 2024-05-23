@@ -217,7 +217,7 @@ def get_parameters_for_stored_procedure():
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
-        sql = "SELECT argument_name, data_type, defaulted, default_value FROM dba_arguments WHERE IN_OUT = 'IN' AND object_name = :storedobject_name AND owner = :schema"
+        sql = "SELECT argument_name, data_type, defaulted, default_value FROM dba_arguments WHERE IN_OUT = 'IN' AND PACKAGE_NAME IS NULL AND object_name = :storedobject_name AND owner = :schema"
         cursor.execute(sql, {'storedobject_name': selectedStoredObjectName, 'schema': selectedSchema})
         parameter_details = [{'argument_name': row[0], 'data_type': row[1], 'defaulted': row[2], 'default_value': row[3]} for row in cursor.fetchall()]
         cursor.close()
