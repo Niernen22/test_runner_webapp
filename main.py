@@ -109,13 +109,21 @@ def edit_steps(test_id):
         cursor.execute(sql)
         modules = [row[0] for row in cursor.fetchall()]
 
-        sql = "SELECT DISTINCT(OBJECT_NAME) FROM DBA_PROCEDURES"
+        sql = "SELECT DISTINCT(OBJECT_NAME) FROM DBA_PROCEDURES WHERE OBJECT_TYPE IN ('FUNCTION' , 'PROCEDURE')"
         cursor.execute(sql)
         storedobject_names = [row[0] for row in cursor.fetchall()]
 
+        sql = "SELECT DISTINCT(OWNER) FROM DBA_PROCEDURES"
+        cursor.execute(sql)
+        procedures_schemas = [row[0] for row in cursor.fetchall()]
+
+        sql = "SELECT PROCEDURE_NAME FROM DBA_PROCEDURES WHERE OBJECT_TYPE = 'PACKAGE'"
+        cursor.execute(sql)
+        storedpackage_names = [row[0] for row in cursor.fetchall()]
+
         cursor.close()
 
-        return render_template('edit_steps.html', test_id=test_id, test_steps=test_steps_data, usernames=usernames, modules=modules, storedobject_names=storedobject_names)
+        return render_template('edit_steps.html', test_id=test_id, test_steps=test_steps_data, usernames=usernames, modules=modules, storedobject_names=storedobject_names, procedures_schemas=procedures_schemas, storedpackage_names=storedpackage_names)
 
     except oracledb.Error as error:
         return f"Error retrieving test steps: {error}"
@@ -186,6 +194,22 @@ def get_tables_for_schema():
         return json.dumps({'error': str(e)})
 
 
+@app.route('/get_procedures_for_schema', methods=['POST'])
+def get_procedures_for_schema():
+    selected_schema = request.json['schema']
+    try:
+        connection = pool.acquire()
+        cursor = connection.cursor()
+        sql = "SELECT OBJECT_NAME FROM DBA_PROCEDURES WHERE OBJECT_TYPE IN ('FUNCTION', 'PROCEDURE') AND OWNER = :schema"
+        cursor.execute(sql, {'schema': selected_schema})
+        procedure_names = [row[0] for row in cursor.fetchall()]
+        cursor.close()
+        pool.release(connection)
+        return json.dumps(procedure_names)
+    except Exception as e:
+        return json.dumps({'error': str(e)})
+
+
 @app.route('/get_parameters_for_stored_procedure', methods=['POST'])
 def get_parameters_for_stored_procedure():
     selectedStoredObjectName = request.json['storedobject_name']
@@ -201,6 +225,56 @@ def get_parameters_for_stored_procedure():
     except Exception as e:
         return json.dumps({'error': str(e)})
 
+
+@app.route('/get_parameters_for_stored_procedure_in_package', methods=['POST'])
+def get_parameters_for_stored_procedure_in_package():
+    selectedStoredObjectName = request.json['storedobject_name']
+    selectedSchema = request.json['schema']
+    selectedPackage = request.json['package_name']
+    try:
+        connection = pool.acquire()
+        cursor = connection.cursor()
+        sql = "SELECT argument_name, data_type, defaulted, default_value FROM dba_arguments WHERE IN_OUT = 'IN' AND object_name = :storedobject_name AND package_name = :package_name AND owner = :schema"
+        cursor.execute(sql, {'storedobject_name': selectedStoredObjectName, 'package_name': selectedPackage, 'schema': selectedSchema})
+        parameter_details = [{'argument_name': row[0], 'data_type': row[1], 'defaulted': row[2], 'default_value': row[3]} for row in cursor.fetchall()]
+        cursor.close()
+        pool.release(connection)
+        return json.dumps(parameter_details)
+    except Exception as e:
+        return json.dumps({'error': str(e)})
+
+
+@app.route('/get_packages_for_schema', methods=['POST'])
+def get_packages_for_schema():
+    selected_schema = request.json['schema']
+    try:
+        connection = pool.acquire()
+        cursor = connection.cursor()
+        sql = "SELECT OBJECT_NAME FROM DBA_PROCEDURES WHERE OBJECT_TYPE = 'PACKAGE' AND OWNER = :schema"
+        cursor.execute(sql, {'schema': selected_schema})
+        package_names = [row[0] for row in cursor.fetchall()]
+        cursor.close()
+        pool.release(connection)
+        return json.dumps(package_names)
+    except Exception as e:
+        return json.dumps({'error': str(e)})
+
+
+@app.route('/get_procedures_for_package', methods=['POST'])
+def get_procedures_for_package():
+    selected_package = request.json['package']
+    selected_schema = request.json['schema']
+    try:
+        connection = pool.acquire()
+        cursor = connection.cursor()
+        sql = "SELECT PROCEDURE_NAME FROM DBA_PROCEDURES WHERE OBJECT_TYPE = 'PACKAGE' AND OWNER = :schema AND OBJECT_NAME = :package"
+        cursor.execute(sql, {'schema': selected_schema, 'package': selected_package})
+        procedure_names = [row[0] for row in cursor.fetchall()]
+        cursor.close()
+        pool.release(connection)
+        return json.dumps(procedure_names)
+    except Exception as e:
+        return json.dumps({'error': str(e)})
 
 
 @app.route('/get_workdays', methods=['GET'])
