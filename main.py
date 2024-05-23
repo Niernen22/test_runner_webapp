@@ -212,12 +212,13 @@ def get_procedures_for_schema():
 
 @app.route('/get_parameters_for_stored_procedure', methods=['POST'])
 def get_parameters_for_stored_procedure():
+    selectedSchema = request.json['schema']
     selectedStoredObjectName = request.json['storedobject_name']
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
-        sql = "SELECT argument_name, data_type, defaulted, default_value FROM dba_arguments WHERE IN_OUT = 'IN' AND object_name = :storedobject_name"
-        cursor.execute(sql, {'storedobject_name': selectedStoredObjectName})
+        sql = "SELECT argument_name, data_type, defaulted, default_value FROM dba_arguments WHERE IN_OUT = 'IN' AND object_name = :storedobject_name AND owner = :schema"
+        cursor.execute(sql, {'storedobject_name': selectedStoredObjectName, 'schema': selectedSchema})
         parameter_details = [{'argument_name': row[0], 'data_type': row[1], 'defaulted': row[2], 'default_value': row[3]} for row in cursor.fetchall()]
         cursor.close()
         pool.release(connection)
