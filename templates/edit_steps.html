@@ -327,17 +327,19 @@
                 var parametersDiv = document.getElementById('parameters');
                 parametersDiv.innerHTML = '';
                 data.forEach(function(parameter) {
+                    var parameterLabel = document.createElement('label');
+                    parameterLabel.textContent = parameter.argument_name + ':';
+                    parametersDiv.appendChild(parameterLabel);
+                
                     var parameterInput = document.createElement('input');
                     parameterInput.type = 'text';
                     parameterInput.value = parameter.default_value;
-                    parameterInput.placeholder = parameter.argument_name;
                     parameterInput.setAttribute('name', parameter.argument_name);
                     parametersDiv.appendChild(parameterInput);
                 });
             })
             .catch(error => console.error('Error:', error));
         }
-    
 
 
         function getParametersForStoredProcedureInPackage(selectedStoredObjectName, selectedSchema, selectedPackage) {
@@ -353,10 +355,13 @@
                 var parametersDiv = document.getElementById('parameters_package');
                 parametersDiv.innerHTML = '';
                 data.forEach(function(parameter) {
+                    var parameterLabel = document.createElement('label');
+                    parameterLabel.textContent = parameter.argument_name + ':';
+                    parametersDiv.appendChild(parameterLabel);
+                
                     var parameterInput = document.createElement('input');
                     parameterInput.type = 'text';
                     parameterInput.value = parameter.default_value;
-                    parameterInput.placeholder = parameter.argument_name;
                     parameterInput.setAttribute('name', parameter.argument_name);
                     parametersDiv.appendChild(parameterInput);
                 });
@@ -365,7 +370,6 @@
         }
 
         
-
         function getPackagesForSchema(selectedSchema) {
             var storedPackageSelect = document.getElementById('storedpackage_name');
             fetch('/get_packages_for_schema', {
@@ -593,16 +597,19 @@
                 return sqlCode;
 
             } else if (selectedType === 'Package') {
-                var type = document.getElementById('type').value;
-                
-                console.log("LM_JOB parameters:", { type, module, name });
-
-                var sqlCode = "declare ";
-                
-                console.log("Generated SQL for Stored Procedure:", sqlCode);
+                var selectedSchema = document.getElementById('procedures_schema_package').value;
+                var selectedPackage = document.getElementById('storedpackage_name').value;
+                var selectedStoredObjectName = document.getElementById('storedobject_name_package').value;
+                var parameterValues = Array.from(document.getElementById('parameters_package').getElementsByTagName('input')).map(function(input) {
+                return input.value;
+                }).join(', ');
+        
+                var sqlCode = "BEGIN " + selectedSchema + "." + selectedPackage + "." + selectedStoredObjectName + "(" + parameterValues + "); END;";
+				
                 return sqlCode;
             }
         }
+
 
 
         function generateAndDisplaySQLSP() {
