@@ -190,7 +190,7 @@
                         </select><br><br>
 
                         <label for="storedobject_name">Stored Function or Procedure Name:</label>
-                        <select id="storedobject_name" name="storedobject_name" onchange="getParametersForStoredProcedure(this.value)">
+                        <select id="storedobject_name" name="storedobject_name" onchange="getParametersForStoredProcedure(this.value, document.getElementById('procedures_schema').value)">
                             {% for storedobject_name in storedobject_names %}
                             <option value="{{ storedobject_name }}">{{ storedobject_name }}</option>
                             {% endfor %}
@@ -314,13 +314,13 @@
         }
 
 
-        function getParametersForStoredProcedure(selectedStoredObjectName) {
+        function getParametersForStoredProcedure(selectedStoredObjectName, selectedSchema) {
             fetch('/get_parameters_for_stored_procedure', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ storedobject_name: selectedStoredObjectName })
+                body: JSON.stringify({ storedobject_name: selectedStoredObjectName, schema: selectedSchema })
             })
             .then(response => response.json())
             .then(data => {
@@ -587,12 +587,13 @@
         function generateSQLSP() {
             var selectedType = document.getElementById('storedprocedure_type').value;
             if (selectedType === 'Function_or_Procedure') {
+				var selectedSchema = document.getElementById('procedures_schema').value;
                 var selectedStoredObjectName = document.getElementById('storedobject_name').value;
                 var parameterValues = Array.from(document.getElementById('parameters').getElementsByTagName('input')).map(function(input) {
                 return input.value;
                 }).join(', ');
         
-                var sqlCode = "BEGIN " + selectedStoredObjectName + "(" + parameterValues + "); END;";
+                var sqlCode = "BEGIN " + selectedSchema + "." + selectedStoredObjectName + "(" + parameterValues + "); END;";
                 
                 return sqlCode;
 
