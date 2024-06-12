@@ -19,8 +19,8 @@
         <tbody>
             {% for test in tests %}
                 <tr>
-                    <td><a href="{{ url_for('test_steps', test_id=test[0]) }}">{{ test[1] }}</a></td>
-                    <td>{{ test[2] }}</td>
+                    <td><a href="{{ url_for('test_steps', test_id=test['ID']) }}">{{ test['NAME'] }}</a></td>
+                    <td>{{ test['STATUS'] }}</td>
                 </tr>
             {% endfor %}
         </tbody>
