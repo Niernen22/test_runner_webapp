@@ -24,14 +24,14 @@
         <tbody>
             {% for step in job_steps_details %}
                 <tr>
-                    <td>{{ step[0] }}</td>
-                    <td>{{ step[1] }}</td>
-                    <td>{{ step[2] }}</td>
-                    <td>{{ step[3] }}</td>
-                    <td>{{ step[4] }}</td>
-                    <td>{{ step[5] }}</td>
-                    <td>{{ step[6] }}</td>
-                    <td>{{ step[7] }}</td>
+                    <td>{{ step['RUN_ID'] }}</td>
+                    <td>{{ step['STEP_ID'] }}</td>
+                    <td>{{ step['STEP_NAME'] }}</td>
+                    <td>{{ step['EVENT'] }}</td>
+                    <td>{{ step['EVENT_TIME'] }}</td>
+                    <td>{{ step['OUTPUT_MESSAGE'] }}</td>
+                    <td>{{ step['ERROR_MESSAGE'] }}</td>
+                    <td>{{ step['JOBNAME'] }}</td>
                 </tr>
             {% endfor %}
         </tbody>
