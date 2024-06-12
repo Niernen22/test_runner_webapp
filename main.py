@@ -27,7 +27,11 @@ def index():
 
         query = "SELECT * FROM TESTS ORDER BY NAME"
         cursor.execute(query)
-        tests = cursor.fetchall()
+
+        tests = []
+        column_names = [col[0] for col in cursor.description]
+        for row in cursor.fetchall():
+            tests.append(dict(zip(column_names, row)))
 
         cursor.close()
 
@@ -35,6 +39,7 @@ def index():
     
     except oracledb.Error as error:
         return f"Error connecting to Oracle DB: {error}"
+
 
 
 @app.route('/job_details')
@@ -45,7 +50,11 @@ def job_details():
 
         query = "SELECT * FROM TEST_RUN_LOG ORDER BY RUN_ID DESC"
         cursor.execute(query)
-        job_details = cursor.fetchall()
+
+        job_details = []
+        column_names = [col[0] for col in cursor.description]
+        for row in cursor.fetchall():
+            job_details.append(dict(zip(column_names, row)))
 
         cursor.close()
 
@@ -53,6 +62,7 @@ def job_details():
 
     except oracledb.Error as error:
         return f"Error connecting to Oracle DB: {error}"
+
 
 
 @app.route('/job_steps_details')
@@ -63,7 +73,11 @@ def job_steps_details():
 
         query = "SELECT * FROM STEP_RUN_LOG ORDER BY RUN_ID DESC, STEP_ID DESC"
         cursor.execute(query)
-        job_steps_details = cursor.fetchall()
+
+        job_steps_details = []
+        column_names = [col[0] for col in cursor.description]
+        for row in cursor.fetchall():
+            job_steps_details.append(dict(zip(column_names, row)))
 
         cursor.close()
 
@@ -71,6 +85,7 @@ def job_steps_details():
 
     except oracledb.Error as error:
         return f"Error connecting to Oracle DB: {error}"
+
         
 
 @app.route('/test_steps/<test_id>')
@@ -81,7 +96,11 @@ def test_steps(test_id):
 
         query = "SELECT * FROM TEST_STEPS WHERE TEST_ID = :test_id ORDER BY ID"
         cursor.execute(query, test_id=test_id)
-        test_steps_data = cursor.fetchall()
+
+        test_steps_data = []
+        column_names = [col[0] for col in cursor.description]
+        for row in cursor.fetchall():
+            test_steps_data.append(dict(zip(column_names, row)))
 
         cursor.close()
 
@@ -89,6 +108,7 @@ def test_steps(test_id):
     
     except oracledb.Error as error:
         return f"Error retrieving test steps: {error}"
+
 
 
 @app.route('/edit_steps/<test_id>')
@@ -99,7 +119,10 @@ def edit_steps(test_id):
 
         query = "SELECT * FROM TEST_STEPS WHERE TEST_ID = :test_id ORDER BY ID"
         cursor.execute(query, test_id=test_id)
-        test_steps_data = cursor.fetchall()
+        test_steps_data = []
+        column_names = [col[0] for col in cursor.description]
+        for row in cursor.fetchall():
+            test_steps_data.append(dict(zip(column_names, row)))
 
         sql = "SELECT USERNAME FROM DBA_USERS"
         cursor.execute(sql)
