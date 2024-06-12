@@ -29,15 +29,15 @@
         <tbody>
             {% for step in test_steps %}
                 <tr>
-                    <td>{{ step[0] }}</td>
-                    <td>{{ step[2] }}</td>
-                    <td>{{ step[3] }}</td>
-                    <td>{{ step[4] }}</td>
-                    <td>{{ step[5] }}</td>
-                    <td>{{ step[6] }}</td>
-                    <td>{{ step[7] }}</td>
-                    <td>{{ step[8] }}</td>
-                    <td>{{ step[9] }}</td>
+                    <td>{{ step['ID'] }}</td>
+                    <td>{{ step['NAME'] }}</td>
+                    <td>{{ step['ORDERNUMBER'] }}</td>
+                    <td>{{ step['STATUS'] }}</td>
+                    <td>{{ step['START_TIME'] }}</td>
+                    <td>{{ step['END_TIME'] }}</td>
+                    <td>{{ step['TYPE'] }}</td>
+                    <td>{{ step['SQL_CODE'] }}</td>
+                    <td>{{ step['TARGET_USER'] }}</td>
                 </tr>
             {% endfor %}
         </tbody>
