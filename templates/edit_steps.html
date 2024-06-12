@@ -70,16 +70,16 @@
         <tbody>
             {% for step in test_steps %}
             <tr>
-                <td>{{ step[0] }}</td>
-                <td>{{ step[1] }}</td>
-                <td>{{ step[2] }}</td>
-                <td>{{ step[3] }}</td>
-                <td>{{ step[7] }}</td>
-                <td>{{ step[8] }}</td>
-                <td>{{ step[9] }}</td>
+                <td>{{ step['ID'] }}</td>
+                <td>{{ step['TEST_ID'] }}</td>
+                <td>{{ step['NAME'] }}</td>
+                <td>{{ step['ORDERNUMBER'] }}</td>
+                <td>{{ step['TYPE'] }}</td>
+                <td>{{ step['SQL_CODE'] }}</td>
+                <td>{{ step['TARGET_USER'] }}</td>
                 <td>
                     <form action="/delete_step" method="post">
-                        <input type="hidden" name="id" value="{{ step[0] }}">
+                        <input type="hidden" name="id" value="{{ step['ID'] }}">
                         <input type="hidden" name="test_id" value="{{ test_id }}">
                         <button type="submit">Delete</button>
                     </form>
