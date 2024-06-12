@@ -43,13 +43,7 @@
         </tbody>
     </table>
 
-    <script>
-        document.getElementById('RunPlanButton').addEventListener('click', function() {
-            setTimeout(function() {
-                location.reload();
-            }, 5000);
-        });
-    </script>
+    <script src="{{ url_for('static', filename='test_steps.js') }}"></script>
 
 </body>
 </html>
