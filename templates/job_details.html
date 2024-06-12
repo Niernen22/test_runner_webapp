@@ -22,12 +22,12 @@
         <tbody>
             {% for job in job_details %}
                 <tr>
-                    <td>{{ job[0] }}</td>
-                    <td>{{ job[1] }}</td>
-                    <td>{{ job[2] }}</td>
-                    <td>{{ job[3] }}</td>
-                    <td>{{ job[4] }}</td>
-                    <td>{{ job[5] }}</td>
+                    <td>{{ job['RUN_ID'] }}</td>
+                    <td>{{ job['TEST_ID'] }}</td>
+                    <td>{{ job['TEST_NAME'] }}</td>
+                    <td>{{ job['EVENT'] }}</td>
+                    <td>{{ job['EVENT_TIME'] }}</td>
+                    <td>{{ job['ERROR_MESSAGE'] }}</td>
                 </tr>
             {% endfor %}
         </tbody>
