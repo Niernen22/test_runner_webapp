@@ -48,7 +48,7 @@ def job_details():
         connection = pool.acquire()
         cursor = connection.cursor()
 
-        query = "SELECT * FROM TEST_RUN_LOG ORDER BY RUN_ID DESC"
+        query = "SELECT * FROM TEST_RUN_LOG ORDER BY EVENT_TIME DESC"
         cursor.execute(query)
 
         job_details = []
@@ -71,7 +71,7 @@ def job_steps_details():
         connection = pool.acquire()
         cursor = connection.cursor()
 
-        query = "SELECT * FROM STEP_RUN_LOG ORDER BY RUN_ID DESC, STEP_ID DESC"
+        query = "SELECT * FROM STEP_RUN_LOG ORDER BY EVENT_TIME DESC"
         cursor.execute(query)
 
         job_steps_details = []
@@ -353,7 +353,7 @@ def run_test_async(test_id):
         connection = pool.acquire()
         cursor = connection.cursor()
 
-        cursor.callproc('test_package.TEST_RUNNER')
+        cursor.callproc('test_package.TEST_RUNNER', [test_id])
 
         connection.commit()
         cursor.close()
