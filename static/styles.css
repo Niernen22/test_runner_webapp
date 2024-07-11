@@ -24,6 +24,20 @@ button, a button {
     font-weight: 500;
 }
 
+input[type="button"], input[type="submit"] {
+    background-color: #3b73af;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    margin: 4px 2px;
+    cursor: pointer;
+    font-weight: 500;
+}
+
 a {
     color: #81b2e6;
     text-decoration: none;
