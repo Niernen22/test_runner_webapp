@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add User</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='mainstyles.css') }}">
+</head>
+<body>
+    <h1>Add User</h1>
+    <a href="{{ url_for('index') }}"><button>Main Page</button></a>
+    <form action="{{ url_for('add_user') }}" method="post">
+        <input type="text" name="username" placeholder="Username" required>
+        <input type="password" name="password" placeholder="Password" required>
+        <label for="is_admin">Admin?</label>
+        <input type="checkbox" id="is_admin" name="is_admin" value="True">
+        <button type="submit">Add User</button>
+    </form>
+</body>
+</html>
