@@ -4,11 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Test Table Contents</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='mainstyles.css') }}">
 </head>
 <body>
     <h1>Test Table Contents</h1>
+    <form action="{{ url_for('logout') }}" method="post" style="display: inline;">
+        <button type="submit">Logout</button>
+    </form>
+    {% if current_user.is_admin %}
+    <form action="{{ url_for('add_user') }}" method="get" style="display: inline;">
+        <button type="submit">Add User</button>
+    </form>
+    <form action="{{ url_for('list_users') }}" method="get" style="display: inline;">
+        <button type="submit">Users</button>
+    </form>
+    {% endif %}
     <a href="{{ url_for('job_details') }}"><button>Job Log Details</button></a>
     <a href="{{ url_for('job_steps_details') }}"><button>Job Steps Log Details</button></a>
+
     <table border="1">
         <thead>
             <tr>
