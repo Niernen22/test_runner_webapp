@@ -2,6 +2,10 @@ About this Project:
 This is a webapplication in the process, the goal is to let developers make their own test plans and run them independently from system administrators.
 
 At the moment the following is available:
+- Login required for viewing every page
+  - Add User: create and delete users (alternatively, there's script for both of these functions to run in the terminal independently without login: create_user.py, delete_user.py)
+  - Users: Listing all users, showing admin prviliges
+    ONLY ADMINS can add or delete users on the page and see these buttons. Unpriviliged users can see the user list if they copy the url, but not the functions.
 - Main Page: Jobs and their statuses
 - Test Steps for Test ID [..]: Test job's steps
 - Edit Steps: Delete and Add steps for a job (ID, Test ID, Step Name, Order Number, Type, SQL Code, Target User
@@ -18,6 +22,7 @@ At the moment the following is available:
   Button Submit: Adds the Job Type and SQL Code to the editing page
 - Job Log Details: Job logging (Run ID, Test ID, Test Name, Event, Event Time, Error Message)
 - Job Steps Log Details: Job Steps Logging (Run ID, Step ID, Step Name, Event, Event Time, Output Message, Error Message, Job Name)
+
 
 
 
