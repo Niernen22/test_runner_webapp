@@ -1,0 +1,9 @@
+-------need to do -------
+
+SQLite format 3
+  id INTEGER NOT NULL, 
+	username VARCHAR(50) NOT NULL, 
+	password VARCHAR(100) NOT NULL, 
+	is_admin BOOLEAN, 
+	PRIMARY KEY (id), 
+	UNIQUE (username)
