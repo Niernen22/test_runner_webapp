@@ -1,25 +1,104 @@
-from flask import Flask, render_template, abort, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for
 from datetime import datetime
 from threading import Thread
 import json
 import oracledb
 import config
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
+from flask_migrate import Migrate
 
 app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False 
+app.config['SECRET_KEY'] = 'secret_key'
+
+db = SQLAlchemy(app)
+
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
 
 username = config.username
 password = config.password
 dsn = config.dsn
 
-pool = oracledb.create_pool(user=username, password=password, dsn=dsn,
-                            min=1, max=5, increment=1)
+pool = oracledb.create_pool(user=username, password=password, dsn=dsn, min=1, max=5, increment=1)
+
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(50), unique=True, nullable=False)
+    password = db.Column(db.String(100), nullable=False)
+    is_admin = db.Column(db.Boolean, default=False)
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+@app.route('/users')
+@login_required
+def list_users():
+    users = User.query.all()
+    return render_template('users.html', users=users)
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        user = User.query.filter_by(username=username).first()
+        if user and check_password_hash(user.password, password):
+            login_user(user)
+            return redirect(url_for('index'))
+        return 'Invalid credentials'
+    return render_template('login.html')
+
+@app.route('/logout', methods=['POST'])
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
+@app.route('/add_user', methods=['GET', 'POST'])
+@login_required
+def add_user():
+    if not current_user.is_admin:
+        return "Access denied", 403
+
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        is_admin = bool(request.form.get('is_admin')) 
+
+        new_user = User(username=username, password=generate_password_hash(password), is_admin=is_admin)
+        db.session.add(new_user)
+        db.session.commit()
+
+        return redirect(url_for('list_users'))
+
+    return render_template('add_user.html')
+
+@app.route('/delete_user/<int:user_id>', methods=['POST'])
+@login_required
+def delete_user(user_id):
+    if not current_user.is_admin:
+        return "Access denied", 403
+
+    user = User.query.get(user_id)
+    if user:
+        db.session.delete(user)
+        db.session.commit()
+        return redirect(url_for('list_users')) 
+    return "User not found", 404
 
 
-@app.route('/favicon.ico')
-def favicon():
-    abort(404)
+@app.errorhandler(404)
+def page_not_found(error):
+    return "Page not found", 404
 
 @app.route('/')
+@login_required
 def index():
     try:
         connection = pool.acquire()
@@ -34,15 +113,18 @@ def index():
             tests.append(dict(zip(column_names, row)))
 
         cursor.close()
+        connection.close()
 
         return render_template('index.html', tests=tests)
-    
+
     except oracledb.Error as error:
         return f"Error connecting to Oracle DB: {error}"
 
 
 
+
 @app.route('/job_details')
+@login_required
 def job_details():
     try:
         connection = pool.acquire()
@@ -66,6 +148,7 @@ def job_details():
 
 
 @app.route('/job_steps_details')
+@login_required
 def job_steps_details():
     try:
         connection = pool.acquire()
@@ -89,6 +172,7 @@ def job_steps_details():
         
 
 @app.route('/test_steps/<test_id>')
+@login_required
 def test_steps(test_id):
     try:
         connection = pool.acquire()
@@ -112,6 +196,7 @@ def test_steps(test_id):
 
 
 @app.route('/edit_steps/<test_id>')
+@login_required
 def edit_steps(test_id):
     try:
         connection = pool.acquire()
@@ -153,6 +238,7 @@ def edit_steps(test_id):
 
 
 @app.route('/add_step', methods=['POST'])
+@login_required
 def add_step():
 
     if request.method == 'POST':
@@ -183,6 +269,7 @@ def add_step():
 
 
 @app.route('/delete_step', methods=['POST'])
+@login_required
 def delete_step():
     try:
         id = request.form['id']
@@ -202,6 +289,7 @@ def delete_step():
 
 
 @app.route('/get_tables_for_schema', methods=['POST'])
+@login_required
 def get_tables_for_schema():
     selected_schema = request.json['schema']
     try:
@@ -218,6 +306,7 @@ def get_tables_for_schema():
 
 
 @app.route('/get_procedures_for_schema', methods=['POST'])
+@login_required
 def get_procedures_for_schema():
     selected_schema = request.json['schema']
     try:
@@ -234,6 +323,7 @@ def get_procedures_for_schema():
 
 
 @app.route('/get_parameters_for_stored_procedure', methods=['POST'])
+@login_required
 def get_parameters_for_stored_procedure():
     selectedSchema = request.json['schema']
     selectedStoredObjectName = request.json['storedobject_name']
@@ -251,6 +341,7 @@ def get_parameters_for_stored_procedure():
 
 
 @app.route('/get_parameters_for_stored_procedure_in_package', methods=['POST'])
+@login_required
 def get_parameters_for_stored_procedure_in_package():
     selectedStoredObjectName = request.json['storedobject_name']
     selectedSchema = request.json['schema']
@@ -269,6 +360,7 @@ def get_parameters_for_stored_procedure_in_package():
 
 
 @app.route('/get_packages_for_schema', methods=['POST'])
+@login_required
 def get_packages_for_schema():
     selected_schema = request.json['schema']
     try:
@@ -285,6 +377,7 @@ def get_packages_for_schema():
 
 
 @app.route('/get_procedures_for_package', methods=['POST'])
+@login_required
 def get_procedures_for_package():
     selected_package = request.json['package']
     selected_schema = request.json['schema']
@@ -302,6 +395,7 @@ def get_procedures_for_package():
 
 
 @app.route('/get_workdays', methods=['GET'])
+@login_required
 def get_workdays():
     try:
         connection = pool.acquire()
@@ -317,6 +411,7 @@ def get_workdays():
 
 
 @app.route('/get_names_for_module', methods=['POST'])
+@login_required
 def get_names_for_module():
     selected_module = request.json['module']
     try:
@@ -333,6 +428,7 @@ def get_names_for_module():
 
 
 @app.route('/get_types_for_module', methods=['POST'])
+@login_required
 def get_types_for_module():
     selected_module = request.json['module']
     try:
@@ -364,6 +460,7 @@ def run_test_async(test_id):
         print(f"Error running test: {error}") 
 
 @app.route('/run_test/<test_id>')
+@login_required
 def run_test(test_id):
     Thread(target=run_test_async, args=(test_id,)).start()
 
