@@ -19,6 +19,13 @@
         <button type="submit">Users</button>
     </form>
     {% endif %}
+
+    <form action="{{ url_for('index') }}" method="GET">
+        <label for="search_name">Search by Name:</label>
+        <input type="text" id="search_name" name="search_name">
+        <button type="submit">Search</button>
+    </form>
+
     <a href="{{ url_for('job_details') }}"><button>Job Log Details</button></a>
     <a href="{{ url_for('job_steps_details') }}"><button>Job Steps Log Details</button></a>
 
