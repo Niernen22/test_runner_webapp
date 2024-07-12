@@ -9,6 +9,13 @@
 <body>
     <h1>Job Details</h1>
     <a href="{{ url_for('index') }}"><button>Main Page</button></a>
+    
+    <form action="{{ url_for('job_details') }}" method="GET">
+        <label for="run_id">Filter by RUN_ID:</label>
+        <input type="text" id="run_id" name="run_id">
+        <button type="submit">Filter</button>
+    </form>
+    
     <table border="1">
         <thead>
             <tr>
