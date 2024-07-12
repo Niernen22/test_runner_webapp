@@ -12,7 +12,7 @@ from flask_migrate import Migrate
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False 
-app.config['SECRET_KEY'] = 'secret_key'
+app.config['SECRET_KEY'] = 'Almafa_123'
 
 db = SQLAlchemy(app)
 
@@ -97,6 +97,8 @@ def delete_user(user_id):
 def page_not_found(error):
     return "Page not found", 404
 
+from flask import request
+
 @app.route('/')
 @login_required
 def index():
@@ -104,8 +106,14 @@ def index():
         connection = pool.acquire()
         cursor = connection.cursor()
 
-        query = "SELECT * FROM TESTS ORDER BY NAME"
-        cursor.execute(query)
+        search_name = request.args.get('search_name')
+
+        if search_name:
+            query = "SELECT * FROM TESTS WHERE NAME LIKE '%' || :search_name || '%' ORDER BY NAME"
+            cursor.execute(query, {'search_name': search_name})
+        else:
+            query = "SELECT * FROM TESTS ORDER BY NAME"
+            cursor.execute(query)
 
         tests = []
         column_names = [col[0] for col in cursor.description]
@@ -121,17 +129,21 @@ def index():
         return f"Error connecting to Oracle DB: {error}"
 
 
-
-
 @app.route('/job_details')
 @login_required
 def job_details():
     try:
+        run_id_filter = request.args.get('run_id')
+
         connection = pool.acquire()
         cursor = connection.cursor()
 
-        query = "SELECT * FROM TEST_RUN_LOG ORDER BY EVENT_TIME DESC"
-        cursor.execute(query)
+        if run_id_filter:
+            query = "SELECT * FROM TEST_RUN_LOG WHERE RUN_ID = :run_id ORDER BY EVENT_TIME DESC"
+            cursor.execute(query, {'run_id': run_id_filter})
+        else:
+            query = "SELECT * FROM TEST_RUN_LOG ORDER BY EVENT_TIME DESC"
+            cursor.execute(query)
 
         job_details = []
         column_names = [col[0] for col in cursor.description]
@@ -146,16 +158,21 @@ def job_details():
         return f"Error connecting to Oracle DB: {error}"
 
 
-
 @app.route('/job_steps_details')
 @login_required
 def job_steps_details():
     try:
+        run_id_filter = request.args.get('run_id')
+
         connection = pool.acquire()
         cursor = connection.cursor()
 
-        query = "SELECT * FROM STEP_RUN_LOG ORDER BY EVENT_TIME DESC"
-        cursor.execute(query)
+        if run_id_filter:
+            query = "SELECT * FROM STEP_RUN_LOG WHERE RUN_ID = :run_id ORDER BY EVENT_TIME DESC"
+            cursor.execute(query, {'run_id': run_id_filter})
+        else:
+            query = "SELECT * FROM STEP_RUN_LOG ORDER BY EVENT_TIME DESC"
+            cursor.execute(query)
 
         job_steps_details = []
         column_names = [col[0] for col in cursor.description]
@@ -168,6 +185,7 @@ def job_steps_details():
 
     except oracledb.Error as error:
         return f"Error connecting to Oracle DB: {error}"
+
 
         
 
