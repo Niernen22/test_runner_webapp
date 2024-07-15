@@ -1,5 +1,6 @@
 About this Project:
 This is a webapplication in the process, the goal is to let developers make their own test plans and run them independently from system administrators.
+Made for oracle databases.
 
 At the moment the following is available:
 - Login required for viewing every page
