@@ -1,20 +1,13 @@
 from flask import Flask, render_template, request, redirect, url_for
-from datetime import datetime
 from threading import Thread
 import json
 import oracledb
 import config
-from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask_migrate import Migrate
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False 
 app.config['SECRET_KEY'] = 'Almafa_123'
-
-db = SQLAlchemy(app)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -26,20 +19,40 @@ dsn = config.dsn
 
 pool = oracledb.create_pool(user=username, password=password, dsn=dsn, min=1, max=5, increment=1)
 
-class User(UserMixin, db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(50), unique=True, nullable=False)
-    password = db.Column(db.String(100), nullable=False)
-    is_admin = db.Column(db.Boolean, default=False)
+class User(UserMixin):
+    def __init__(self, id, username, password, is_admin):
+        self.id = id
+        self.username = username
+        self.password = password
+        self.is_admin = is_admin
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    connection = pool.acquire()
+    cursor = connection.cursor()
+    query = "SELECT id, username, password, is_admin FROM users WHERE id = :id"
+    cursor.execute(query, {'id': user_id})
+    row = cursor.fetchone()
+    if row:
+        user = User(row[0], row[1], row[2], bool(row[3]))
+    else:
+        user = None
+    cursor.close()
+    pool.release(connection)
+    return user
 
 @app.route('/users')
 @login_required
 def list_users():
-    users = User.query.all()
+    connection = pool.acquire()
+    cursor = connection.cursor()
+    query = "SELECT id, username, password, is_admin FROM users"
+    cursor.execute(query)
+    users = []
+    for row in cursor:
+        users.append(User(row[0], row[1], row[2], bool(row[3])))
+    cursor.close()
+    pool.release(connection)
     return render_template('users.html', users=users)
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -47,8 +60,15 @@ def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        user = User.query.filter_by(username=username).first()
-        if user and check_password_hash(user.password, password):
+        connection = pool.acquire()
+        cursor = connection.cursor()
+        query = "SELECT id, username, password, is_admin FROM users WHERE username = :username"
+        cursor.execute(query, {'username': username})
+        row = cursor.fetchone()
+        cursor.close()
+        pool.release(connection)
+        if row and check_password_hash(row[2], password):
+            user = User(row[0], row[1], row[2], bool(row[3]))
             login_user(user)
             return redirect(url_for('index'))
         return 'Invalid credentials'
@@ -69,11 +89,15 @@ def add_user():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        is_admin = bool(request.form.get('is_admin')) 
+        is_admin = bool(request.form.get('is_admin'))
 
-        new_user = User(username=username, password=generate_password_hash(password), is_admin=is_admin)
-        db.session.add(new_user)
-        db.session.commit()
+        connection = pool.acquire()
+        cursor = connection.cursor()
+        insert_query = "INSERT INTO users (username, password, is_admin) VALUES (:username, :password, :is_admin)"
+        cursor.execute(insert_query, {'username': username, 'password': generate_password_hash(password), 'is_admin': is_admin})
+        connection.commit()
+        cursor.close()
+        pool.release(connection)
 
         return redirect(url_for('list_users'))
 
@@ -85,19 +109,21 @@ def delete_user(user_id):
     if not current_user.is_admin:
         return "Access denied", 403
 
-    user = User.query.get(user_id)
-    if user:
-        db.session.delete(user)
-        db.session.commit()
-        return redirect(url_for('list_users')) 
-    return "User not found", 404
+    connection = pool.acquire()
+    cursor = connection.cursor()
+    delete_query = "DELETE FROM users WHERE id = :id"
+    cursor.execute(delete_query, {'id': user_id})
+    connection.commit()
+    cursor.close()
+    pool.release(connection)
+
+    return redirect(url_for('list_users'))
 
 
 @app.errorhandler(404)
 def page_not_found(error):
     return "Page not found", 404
 
-from flask import request
 
 @app.route('/')
 @login_required
