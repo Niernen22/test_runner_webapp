@@ -7,7 +7,7 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'Almafa_123'
+app.config['SECRET_KEY'] = 'secret_key'
 
 login_manager = LoginManager()
 login_manager.init_app(app)
