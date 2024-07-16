@@ -31,7 +31,7 @@ a {
 }
 
 a:hover {
-    color: rgb(63, 137, 218);
+    color: rgb(0, 58, 121);
 }
 
 table {
@@ -55,5 +55,5 @@ th {
 }
 
 tr:hover {
-    background-color: #36587c;
+    background-color: #5e97d3;
 }
