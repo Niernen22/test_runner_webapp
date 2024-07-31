@@ -25,9 +25,9 @@ At the moment the following is available:
 - Job Steps Log Details: Job Steps Logging (Run ID, Step ID, Step Name, Event, Event Time, Output Message, Error Message, Job Name)
 
 App design:
-![login](https://github.com/user-attachments/assets/bd2ed59c-b574-4658-ab53-da2a26a26015)
-![index](https://github.com/user-attachments/assets/e313efd9-42a7-48b1-afc6-78e6c7cc9843)
-![job_steps_details](https://github.com/user-attachments/assets/ec97f1f4-73a1-48bf-bdbf-be6d824fb066)
+![login](https://github.com/user-attachments/assets/358410dc-1e06-40f8-bf8f-c36cd4863725)
+![index](https://github.com/user-attachments/assets/25eba555-7ff0-4e6c-8a78-f94e13540efe)
+![job_steps_details](https://github.com/user-attachments/assets/6b4f6d08-d731-40bb-8f45-117794035d0c)
 ![edit_steps](https://github.com/user-attachments/assets/be17c308-bbca-43a1-9b21-bdf3f4165e18)
 
 
