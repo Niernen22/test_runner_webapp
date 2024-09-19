@@ -13,26 +13,20 @@
     <table border="1">
         <thead>
             <tr>
-                <th>ID</th>
-                <th>Test ID</th>
-                <th>Step Name</th>
                 <th>Order Number</th>
+                <th>Step Name</th>
                 <th>Type</th>
                 <th>SQL Code</th>
-                <th>Target User</th>
                 <th>Action</th>
             </tr>
         </thead>
         <tbody>
             {% for step in test_steps %}
             <tr>
-                <td>{{ step['ID'] }}</td>
-                <td>{{ step['TEST_ID'] }}</td>
-                <td>{{ step['NAME'] }}</td>
                 <td>{{ step['ORDERNUMBER'] }}</td>
+                <td>{{ step['NAME'] }}</td>
                 <td>{{ step['TYPE'] }}</td>
                 <td>{{ step['SQL_CODE'] }}</td>
-                <td>{{ step['TARGET_USER'] }}</td>
                 <td>
                     <form action="/delete_step" method="post">
                         <input type="hidden" name="id" value="{{ step['ID'] }}">
@@ -42,32 +36,24 @@
                 </td>
             </tr>
             {% endfor %}
-            <tr>
-                <form id="addStepForm" action="/add_step" method="post">
-                    <td><input type="text" name="new_id"></td>
-                    <td><input type="text" name="new_test_id"></td>
-                    <td><input type="text" name="new_step_name"></td>
-                    <td><input type="text" name="new_order_number"></td>
-                    <td><input type="text" name="new_type" id="new_type" value=""></td>
-                    <td>
-                        <button type="button" onclick="openPopup()">Add SQL</button>
-                        <input type="text" name="new_sql_code" id="new_sql_code" value="">
-                    </td>
-                    <td><input type="text" name="new_target_user"></td>
-                    <td><button type="submit">Add</button></td>
-                </form>                
-            </tr>
         </tbody>
     </table>
+
+    <button type="button" onclick="openPopup()">Add Step</button>
 
     <div id="myModal" class="modal">
         <div class="modal-content">
             <span class="close">&times;</span>
             <h2>Add Step</h2>
             <form id="stepForm" onsubmit="event.preventDefault()">
-                <label for="step_type">Select Step Type:</label>
+
+                <label for="new_step_name">Step Name:</label><br>
+                <input type="text" id="new_step_name" name="new_step_name"><br>
+
+
+                <label for="step_type">Select Step Type:</label><br>
                 <select id="step_type" name="step_type" onchange="showParametersForm()">
-                    <option value="none">Select Step Type</option>
+                    <option value="none">---select---</option>
                     <option value="TABLECOPY">Table Copy</option>
                     <option value="LM_JOB">LM Job</option>
                     <option value="STORED_PROCEDURE">Stored Procedure</option>
@@ -76,33 +62,33 @@
                 <div id="parametersForm" style="display: none;">
                     <h3>Enter Parameters for TABLECOPY_PACKAGE.TABLECOPY</h3>
         
-                    <label for="source_schema">Source Schema:</label>
+                    <label for="source_schema">Source Schema:</label><br>
                     <select id="source_schema" name="source_schema" onchange="getTablesForSourceSchema(this.value)">
                         {% for username in usernames %}
                         <option value="{{ username }}">{{ username }}</option>
                         {% endfor %}
                     </select><br><br>
         
-                    <label for="source_table">Source Table:</label>
+                    <label for="source_table">Source Table:</label><br>
                     <select id="source_table" name="source_table"></select><br><br>
         
-                    <label for="target_schema">Target Schema:</label>
+                    <label for="target_schema">Target Schema:</label><br>
                     <select id="target_schema" name="target_schema" onchange="getTablesForTargetSchema(this.value)">
                         {% for username in usernames %}
                         <option value="{{ username }}">{{ username }}</option>
                         {% endfor %}
                     </select><br><br>
         
-                    <label for="target_table">Target Table:</label>
+                    <label for="target_table">Target Table:</label><br>
                     <select id="target_table" name="target_table"></select><br><br>
         
-                    <label for="truncate">Truncate (true/false):</label>
+                    <label for="truncate">Truncate (true/false):</label><br>
                     <select id="truncate" name="truncate">
                         <option value="true">True</option>
                         <option value="false">False</option>
                     </select><br><br>            
         
-                    <label for="date">Date:</label>
+                    <label for="date">Date:</label><br>
                     <select id="date" name="date"></select><br><br>
                 </div>
 
@@ -110,17 +96,17 @@
                 <div id="LMparametersForm" style="display: none;">
                     <h3>Enter Parameters for LM_JOB</h3>
                 
-                    <label for="module">Select Module:</label>
+                    <label for="module">Select Module:</label><br>
                     <select id="module" name="module" onchange="getTypesForModule(this.value); getNamesForModule(this.value)">
                         {% for module in modules %}
                         <option value="{{ module }}">{{ module }}</option>
                         {% endfor %}
                     </select><br><br>
 
-                    <label for="type">Type:</label>
+                    <label for="type">Type:</label><br>
                     <span id="type" name="type"></span><br><br>
 
-                    <label for="name">Select Name:</label>
+                    <label for="name">Select Name:</label><br>
                     <select id="name" name="name"></select><br><br>
                 </div>
 
@@ -128,23 +114,23 @@
                 <div id="StoredProcedureForm" style="display: none;">
                     <h3>Enter Parameters for Stored Procedure</h3>
 
-                    <label for="storedprocedure_type">Select Stored Procedure Type:</label>
+                    <label for="storedprocedure_type">Select Stored Procedure Type:</label><br>
                     <select id="storedprocedure_type" name="storedprocedure_type" onchange="showSPParametersForm()">
-                        <option value="none">Select Stored Procedure Type</option>
+                        <option value="none">---select---</option>
                         <option value="Function_or_Procedure">Function or Procedure</option>
                         <option value="Package">Package</option>
                     </select><br><br>
 
                     <div id="FunctionOrProcedureForm" style="display: none;">
 
-                        <label for="procedures_schema">Schema:</label>
+                        <label for="procedures_schema">Schema:</label><br>
                         <select id="procedures_schema" name="procedures_schema" onchange="getProceduresForSchema(this.value)">
                             {% for procedures_schema in procedures_schemas %}
                             <option value="{{ procedures_schema }}">{{ procedures_schema }}</option>
                             {% endfor %}
                         </select><br><br>
 
-                        <label for="storedobject_name">Stored Function or Procedure Name:</label>
+                        <label for="storedobject_name">Stored Function or Procedure Name:</label><br>
                         <select id="storedobject_name" name="storedobject_name" onchange="getParametersForStoredProcedure(this.value, document.getElementById('procedures_schema').value)">
                             {% for storedobject_name in storedobject_names %}
                             <option value="{{ storedobject_name }}">{{ storedobject_name }}</option>
@@ -152,53 +138,47 @@
                         </select><br><br>
 
 
-                        <label for="parameters">Parameters:</label>
+                        <label for="parameters">Parameters:</label><br>
                         <div id="parameters"></div><br><br>
 
                     </div>
 
                     <div id="PackageForm" style="display: none;">
                     
-                        <label for="procedures_schema">Schema:</label>
+                        <label for="procedures_schema">Schema:</label><br>
                         <select id="procedures_schema_package" name="procedures_schema" onchange="getPackagesForSchema(this.value)">
                             {% for procedures_schema in procedures_schemas %}
                             <option value="{{ procedures_schema }}">{{ procedures_schema }}</option>
                             {% endfor %}
                         </select><br><br>
                     
-                        <label for="storedpackage_name">Stored Package Name:</label>
+                        <label for="storedpackage_name">Stored Package Name:</label><br>
                         <select id="storedpackage_name" name="storedpackage_name" onchange="getProceduresForPackage(this.value, document.getElementById('procedures_schema_package').value)">
                             {% for storedpackage_name in storedpackage_names %}
                             <option value="{{ storedpackage_name }}">{{ storedpackage_name }}</option>
                             {% endfor %}
                         </select><br><br>
                     
-                        <label for="storedobject_name">Stored Package's Function or Procedure Name:</label>
+                        <label for="storedobject_name">Stored Package's Function or Procedure Name:</label><br>
                         <select id="storedobject_name_package" name="storedobject_name" onchange="getParametersForStoredProcedureInPackage(this.value, document.getElementById('procedures_schema_package').value, document.getElementById('storedpackage_name').value)">
                             {% for storedobject_name in storedobject_names %}
                             <option value="{{ storedobject_name }}">{{ storedobject_name }}</option>
                             {% endfor %}
                         </select><br><br>
                     
-                        <label for="parameters_package">Parameters:</label>
+                        <label for="parameters_package">Parameters:</label><br>
                         <div id="parameters_package"></div><br><br>
                     </div>
-                    
-
-                    <button id="generateSQLButtonSP" onclick="generateAndDisplaySQLSP()">Generate SQL</button>
                 </div>
-        
-                <button id="generateSQLButton" onclick="generateAndDisplaySQL()">Generate SQL</button>
-
-                <div id="sql_code_display"></div>
                 
-                <input type="hidden" name="new_sql_code" id="new_sql_code" value="">
-                
-                <input type="button" value="Submit" onclick="sendSQLToParent()">
+                <input type="button" value="Submit" onclick="submitFormData()">
             </form>
         </div>
     </div>
     
+    <script>
+         test_id="{{ test_id }}"
+    </script>    
     <script src="{{ url_for('static', filename='js/edit_steps.js') }}"></script>
 </body>
 </html>
