@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, jsonify
 from threading import Thread
 import json
 import oracledb
@@ -7,7 +7,7 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'secret_key'
+app.config['SECRET_KEY'] = 'Almafa_123'
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -41,9 +41,9 @@ def load_user(user_id):
     pool.release(connection)
     return user
 
-@app.route('/users')
+@app.route('/manage_users')
 @login_required
-def list_users():
+def manage_users():
     connection = pool.acquire()
     cursor = connection.cursor()
     query = "SELECT id, username, password, is_admin FROM users"
@@ -53,7 +53,7 @@ def list_users():
         users.append(User(row[0], row[1], row[2], bool(row[3])))
     cursor.close()
     pool.release(connection)
-    return render_template('users.html', users=users)
+    return render_template('manage_users.html', users=users)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -153,6 +153,34 @@ def index():
 
     except oracledb.Error as error:
         return f"Error connecting to Oracle DB: {error}"
+
+@app.route('/add_test', methods=['POST'])
+@login_required
+def add_test():
+    try:
+        connection = pool.acquire()
+        cursor = connection.cursor()
+
+        new_id_query = "SELECT MAX(ID) FROM TESTS"
+        cursor.execute(new_id_query)
+        result = cursor.fetchone()
+        new_id = (result[0] if result[0] is not None else 0) + 1
+
+        test_name = request.form['new_test_name']
+
+        query = "INSERT INTO TESTS (ID, NAME) VALUES (:id, :name)"
+        cursor.execute(query, {'id': new_id, 'name': test_name})
+
+        connection.commit()
+        cursor.close()
+        connection.close()
+
+        return redirect(url_for('edit_steps', test_id=new_id))
+
+    except oracledb.Error as error:
+        return f"Error inserting new test: {error}"
+
+
 
 
 @app.route('/job_details')
@@ -281,35 +309,102 @@ def edit_steps(test_id):
         return f"Error retrieving test steps: {error}"
 
 
-@app.route('/add_step', methods=['POST'])
+@app.route('/add_step/<test_id>', methods=['POST'])
 @login_required
-def add_step():
-
-    if request.method == 'POST':
-        new_id = request.form['new_id']
-        new_test_id = request.form['new_test_id']
-        new_step_name = request.form['new_step_name']
-        new_order_number = request.form['new_order_number']
-        new_type = request.form['new_type']
-        new_sql_code = request.form['new_sql_code']
-        new_target_user = request.form['new_target_user']
-
+def add_step(test_id):
+    
     try:
+        if request.is_json:
+            data = request.get_json()
+        else:
+            return jsonify({'success': False, 'error': 'Invalid input format'})
+
+        new_step_name = data.get('new_step_name')
+        step_type = data.get('step_type')
+        sql_code = ''
+        target_user = 'STA_TEST'
+       
+        def default_if_none(value, default=''):
+            return value if value is not None else default
+
+        if step_type == 'TABLECOPY':
+            source_schema = default_if_none(data.get('source_schema'))
+            source_table = default_if_none(data.get('source_table'))
+            target_schema = default_if_none(data.get('target_schema'))
+            target_table = default_if_none(data.get('target_table'))
+            truncate = default_if_none(data.get('truncate'))
+            chosen_date = default_if_none(data.get('date'))
+        
+            sql_code = f"""
+            BEGIN 
+                TABLECOPY_PACKAGE.TABLECOPY(
+                    '{source_schema}', 
+                    '{source_table}', 
+                    '{target_schema}', 
+                    '{target_table}', 
+                    '{truncate}', 
+                    TO_DATE('{chosen_date}', 'yyyy-mm-dd')
+                ); 
+            END;
+            """
+        
+        elif step_type == 'LM_JOB':
+            module = default_if_none(data.get('module'))
+            _type = default_if_none(data.get('type'))
+            name = default_if_none(data.get('name'))
+
+            sql_code = f"""
+            declare 
+                p_result varchar2(4000); 
+                p_err_code varchar2(4000); 
+                p_output clob; 
+            begin 
+                lm.{_type}.execute(1, '{module}', '{name}', p_result, p_err_code, p_output, false); 
+                dbms_output.put_line(p_result || ' - ' || p_err_code); 
+                dbms_output.put_line(p_output); 
+            end; 
+            """
+
+        elif step_type == 'STORED_PROCEDURE':
+            storedprocedure_type = default_if_none(data.get('storedprocedure_type'))
+            parameters = ', '.join([f"'{default_if_none(value)}'" for value in data.get('parameters', {}).values()])
+            if storedprocedure_type == 'Function_or_Procedure':
+                procedures_schema = default_if_none(data.get('procedures_schema'))
+                storedobject_name = default_if_none(data.get('storedobject_name'))
+                sql_code = f"BEGIN {procedures_schema}.{storedobject_name}({parameters}); END;"
+        
+            elif storedprocedure_type == 'Package':
+                procedures_schema_package = default_if_none(data.get('procedures_schema_package'))
+                storedpackage_name = default_if_none(data.get('storedpackage_name'))
+                storedobject_name_package = default_if_none(data.get('storedobject_name_package'))
+                sql_code = f"BEGIN {procedures_schema_package}.{storedpackage_name}.{storedobject_name_package}({parameters}); END;"
+
         connection = pool.acquire()
         cursor = connection.cursor()
+        
+        new_id_query = "SELECT MAX(ID) FROM TEST_STEPS"
+        cursor.execute(new_id_query)
+        result = cursor.fetchone()
+        new_id = (result[0] if result[0] is not None else 0) + 1
+
+        new_order_query = "SELECT MAX(ORDERNUMBER) FROM TEST_STEPS WHERE TEST_ID = :test_id"
+        cursor.execute(new_order_query, (test_id,))
+        result = cursor.fetchone()
+        new_order_number = (result[0] if result[0] is not None else 0) + 1
 
         sql = "INSERT INTO TEST_STEPS (ID, TEST_ID, NAME, ORDERNUMBER, STATUS, TYPE, SQL_CODE, TARGET_USER) VALUES (:1, :2, :3, :4, :5, :6, :7, :8)"
-        data = (new_id, new_test_id, new_step_name, new_order_number, 'ADDED', new_type, new_sql_code, new_target_user)
+        data = (new_id, test_id, new_step_name, new_order_number, 'ADDED', step_type, sql_code, target_user)
 
         cursor.execute(sql, data)
         connection.commit()
 
         cursor.close()
 
-        return redirect(url_for('edit_steps', test_id=new_test_id))
+        return jsonify({'success': True, 'redirect_url': url_for('edit_steps', test_id=test_id)})
 
     except oracledb.Error as error:
-        return f"Error retrieving test steps: {error}"
+        return jsonify({'success': False, 'error': str(error)})
+
 
 
 @app.route('/delete_step', methods=['POST'])
@@ -509,6 +604,7 @@ def run_test(test_id):
     Thread(target=run_test_async, args=(test_id,)).start()
 
     return redirect(url_for('test_steps', test_id=test_id))
+
 
 
 if __name__ == '__main__':
