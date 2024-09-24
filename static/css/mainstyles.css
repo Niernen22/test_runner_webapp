@@ -72,12 +72,12 @@ tr:hover {
     box-shadow: rgba(50, 50, 93, 0.25) 0px 30px 60px -12px inset, rgba(0, 0, 0, 0.3) 0px 18px 36px -18px inset;
 }
 
-input[type="text"], input[type="password"]{
+input[type="text"]{
     padding: 10px;
     border: 1px solid #ccc;
     border-radius: 5px;
     font-size: 16px;
-    width: 100%;
+    width: 20%;
     box-sizing: border-box;
 }
 
@@ -103,6 +103,24 @@ input[type="text"], input[type="password"]{
     border-radius: 10px;
 }
 
+.modal label {
+    font-weight: 500;
+}
+
+.modal input[type="text"],
+.modal select
+{
+    width: 30%;
+    padding: 10px;
+    margin: 8px 0;
+    box-sizing: border-box;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+
+    font-family: 'Roboto', sans-serif;
+    font-size: 16px;
+}
+
 .close {
     color: #aaa;
     float: ight;
@@ -123,8 +141,20 @@ input[type="text"], input[type="password"]{
 
 #sql_code_display {
     display: none;
+    background-color: #ecebeb;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    padding: 15px;
+    margin-top: 20px;
+    color: #333;
+    font-family: 'Courier New', Courier, monospace;
     white-space: pre-wrap;
+    max-height: 300px;
+    overflow-y: auto;
+    word-wrap: break-word; 
+    box-shadow: 0px 0px 5px rgba(0, 0, 0, 0.1);
 }
+
 
 .checkbox-wrapper-4 * {
     box-sizing: border-box;
@@ -152,11 +182,11 @@ input[type="text"], input[type="password"]{
 }
 .checkbox-wrapper-4 .cbx span:first-child {
     position: relative;
-    width: 24px; /* Increased size */
-    height: 24px; /* Increased size */
+    width: 24px;
+    height: 24px;
     border-radius: 4px;
     transform: scale(1);
-    border: 2px solid #cccfdb; /* Adjusted border width */
+    border: 2px solid #cccfdb;
     transition: all 0.2s ease;
     box-shadow: 0 1px 1px rgba(0,16,75,0.05);
     display: flex;
