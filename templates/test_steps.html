@@ -16,9 +16,9 @@
     <table border="1">
         <thead>
             <tr>
-                <th>ID</th>
-                <th>Step Name</th>
                 <th>Order Number</th>
+                <th>Step Name</th>
+                <th>ID</th>
                 <th>Status</th>
                 <th>Start Time</th>
                 <th>End Time</th>
@@ -30,9 +30,9 @@
         <tbody>
             {% for step in test_steps %}
                 <tr>
-                    <td>{{ step['ID'] }}</td>
-                    <td>{{ step['NAME'] }}</td>
                     <td>{{ step['ORDERNUMBER'] }}</td>
+                    <td>{{ step['NAME'] }}</td>
+                    <td>{{ step['ID'] }}</td>
                     <td>{{ step['STATUS'] }}</td>
                     <td>{{ step['START_TIME'] }}</td>
                     <td>{{ step['END_TIME'] }}</td>
