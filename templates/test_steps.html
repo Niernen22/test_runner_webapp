@@ -12,7 +12,9 @@
     <a href="{{ url_for('job_details') }}"><button>Job Log Details</button></a>
     <a href="{{ url_for('job_steps_details') }}"><button>Job Steps Log Details</button></a>
     <a href="{{ url_for('edit_steps', test_id=test_id )}}"><button>Edit Test Steps</button></a>
-    <a id="RunPlanButton" href="{{ url_for('run_test', test_id=test_id )}}"><button>Run Test Plan</button></a> 
+    <form action="{{ url_for('run_test', test_id=test_id )}}" method="POST">
+        <button id="RunPlanButton">Run Test Plan</button>
+    </form>
     <table border="1">
         <thead>
             <tr>
@@ -44,7 +46,7 @@
         </tbody>
     </table>
 
-    <script src="{{ url_for('static', filename='test_steps.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/test_steps.js') }}"></script>
 
 </body>
 </html>
