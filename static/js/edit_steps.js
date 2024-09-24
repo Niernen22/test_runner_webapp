@@ -369,3 +369,64 @@ function submitFormData() {
         alert("There was an error submitting the form. Please try again.");
     });
 }
+
+
+function enableDragAndDrop() {
+    const rows = document.querySelectorAll('tbody tr');
+    rows.forEach(row => {
+        row.draggable = true;
+
+        row.addEventListener('dragstart', (event) => {
+            event.dataTransfer.setData('text/plain', row.rowIndex);
+        });
+
+        row.addEventListener('dragover', (event) => {
+            event.preventDefault();
+        });
+
+        row.addEventListener('drop', (event) => {
+            event.preventDefault();
+            const draggingRowIndex = event.dataTransfer.getData('text');
+            const draggingRow = document.querySelector(`tbody tr:nth-child(${draggingRowIndex})`);
+            const currentRow = event.target.closest('tr');
+            
+            if (draggingRow !== currentRow) {
+                const tbody = document.querySelector('tbody');
+                tbody.insertBefore(draggingRow, currentRow.nextSibling);
+            }
+        });
+    });
+}
+
+function finishEditing() {
+    const rows = document.querySelectorAll('tbody tr');
+    const data = [];
+
+    rows.forEach((row, index) => {
+        const id = row.querySelector('input[name="id"]').value;
+        data.push({ id: id, order_number: index + 1 });
+    });
+
+    fetch('/update_order', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            window.location.href = `/test_steps/${test_id}`;
+        } else {
+            alert('Error updating order');
+        }
+    })
+    .catch((error) => {
+        console.error('Error:', error);
+    });
+}
+
+document.addEventListener('DOMContentLoaded', enableDragAndDrop);
+
