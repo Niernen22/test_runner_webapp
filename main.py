@@ -250,7 +250,7 @@ def test_steps(test_id):
         connection = pool.acquire()
         cursor = connection.cursor()
 
-        query = "SELECT * FROM TEST_STEPS WHERE TEST_ID = :test_id ORDER BY ID"
+        query = "SELECT * FROM TEST_STEPS WHERE TEST_ID = :test_id ORDER BY ORDERNUMBER"
         cursor.execute(query, test_id=test_id)
 
         test_steps_data = []
@@ -274,7 +274,7 @@ def edit_steps(test_id):
         connection = pool.acquire()
         cursor = connection.cursor()
 
-        query = "SELECT * FROM TEST_STEPS WHERE TEST_ID = :test_id ORDER BY ID"
+        query = "SELECT * FROM TEST_STEPS WHERE TEST_ID = :test_id ORDER BY ORDERNUMBER"
         cursor.execute(query, test_id=test_id)
         test_steps_data = []
         column_names = [col[0] for col in cursor.description]
@@ -307,6 +307,33 @@ def edit_steps(test_id):
 
     except oracledb.Error as error:
         return f"Error retrieving test steps: {error}"
+
+
+@app.route('/update_order', methods=['POST'])
+@login_required
+def update_order():
+    data = request.get_json()
+    
+    try:
+        connection = pool.acquire()
+        cursor = connection.cursor()
+
+        for item in data:
+            query = "UPDATE TEST_STEPS SET ORDERNUMBER = :order_number WHERE ID = :id"
+            cursor.execute(query, order_number=item['order_number'], id=item['id'])
+
+        connection.commit()
+        
+        return jsonify({"success": True}), 200
+
+    except Exception as e:
+        print(e)
+        return jsonify({"success": False}), 500
+
+    finally:
+        cursor.close()
+        connection.close()
+
 
 
 @app.route('/add_step/<test_id>', methods=['POST'])
