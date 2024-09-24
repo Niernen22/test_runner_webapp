@@ -622,7 +622,7 @@ def run_test_async(test_id):
         connection.commit()
         cursor.close()
 
-        print(f"Test successfully executed! Run ID: {v_run_id}")
+        print(f"Test started successfully! Run ID: {v_run_id}")
 
     except oracledb.Error as error:
         print(f"Error running test: {error}")
