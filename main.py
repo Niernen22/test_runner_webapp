@@ -6,8 +6,10 @@ import config
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 
+secret_key = config.secret_key
+
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'Almafa_123'
+app.config['SECRET_KEY'] = secret_key
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -615,23 +617,23 @@ def run_test_async(test_id):
         connection = pool.acquire()
         cursor = connection.cursor()
 
-        cursor.callproc('test_package.TEST_RUNNER', [test_id])
+        v_run_id = cursor.callfunc('TEST_PACKAGE.TEST_RUNNER', oracledb.NUMBER, [test_id])
 
         connection.commit()
         cursor.close()
 
-        print("Test successfully executed!")
+        print(f"Test successfully executed! Run ID: {v_run_id}")
 
     except oracledb.Error as error:
-        print(f"Error running test: {error}") 
+        print(f"Error running test: {error}")
+        return {'success': False, 'error': str(error)}
 
-@app.route('/run_test/<test_id>')
+@app.route('/run_test/<test_id>', methods=['POST'])
 @login_required
 def run_test(test_id):
     Thread(target=run_test_async, args=(test_id,)).start()
 
-    return redirect(url_for('test_steps', test_id=test_id))
-
+    return jsonify({'success': True, 'message': 'Test started successfully!'})
 
 
 if __name__ == '__main__':
