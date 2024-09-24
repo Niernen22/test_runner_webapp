@@ -8,7 +8,7 @@
 </head>
 <body>
     <h1>Edit Test Steps for Test ID: {{ test_id }}</h1>
-    <a href="{{ url_for('test_steps', test_id=test_id) }}"><button>Finish Editing</button></a>
+    <button onclick="finishEditing()">Finish Editing</button>
     <a href="{{ url_for('index') }}"><button>Main Page</button></a>
     <table border="1">
         <thead>
