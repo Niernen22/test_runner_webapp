@@ -258,3 +258,25 @@ input[type="text"],input[type="password"]{
         transform: scale(0.9);
     }
 }
+
+.dragging {
+    background-color: #437db0;
+    opacity: 0.6;
+}
+
+.drop-target {
+    border: 2px dashed #007bff;
+    background-color: #345b82;
+}
+
+tr {
+    transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.moving-up {
+    transform: translateY(-10px);
+}
+
+.moving-down {
+    transform: translateY(10px);
+}
