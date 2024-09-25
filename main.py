@@ -101,7 +101,7 @@ def add_user():
         cursor.close()
         pool.release(connection)
 
-        return redirect(url_for('list_users'))
+        return redirect(url_for('manage_users'))
 
     return render_template('add_user.html')
 
@@ -119,7 +119,7 @@ def delete_user(user_id):
     cursor.close()
     pool.release(connection)
 
-    return redirect(url_for('list_users'))
+    return redirect(url_for('manage_users'))
 
 
 @app.errorhandler(404)
@@ -624,6 +624,8 @@ def run_test_async(test_id):
 
         print(f"Test started successfully! Run ID: {v_run_id}")
 
+        return {'success': True, 'v_run_id': v_run_id}
+
     except oracledb.Error as error:
         print(f"Error running test: {error}")
         return {'success': False, 'error': str(error)}
@@ -631,9 +633,12 @@ def run_test_async(test_id):
 @app.route('/run_test/<test_id>', methods=['POST'])
 @login_required
 def run_test(test_id):
-    Thread(target=run_test_async, args=(test_id,)).start()
-
-    return jsonify({'success': True, 'message': 'Test started successfully!'})
+    result = run_test_async(test_id)
+    
+    if result['success']:
+        return jsonify({'success': True, 'message': 'Test started successfully!', 'v_run_id': result['v_run_id']})
+    else:
+        return jsonify({'success': False, 'error': result['error']}), 500
 
 
 if __name__ == '__main__':
