@@ -373,30 +373,57 @@ function submitFormData() {
 
 function enableDragAndDrop() {
     const rows = document.querySelectorAll('tbody tr');
+    let draggingRow = null;
+
     rows.forEach(row => {
         row.draggable = true;
 
         row.addEventListener('dragstart', (event) => {
+            draggingRow = row;
+            row.classList.add('dragging');
             event.dataTransfer.setData('text/plain', row.rowIndex);
         });
 
         row.addEventListener('dragover', (event) => {
             event.preventDefault();
+            const currentRow = event.target.closest('tr');
+
+            if (draggingRow && draggingRow !== currentRow) {
+                currentRow.classList.add('drop-target');
+            }
+        });
+
+        row.addEventListener('dragleave', () => {
+            row.classList.remove('drop-target');
         });
 
         row.addEventListener('drop', (event) => {
             event.preventDefault();
-            const draggingRowIndex = event.dataTransfer.getData('text');
-            const draggingRow = document.querySelector(`tbody tr:nth-child(${draggingRowIndex})`);
             const currentRow = event.target.closest('tr');
-            
-            if (draggingRow !== currentRow) {
+
+            if (draggingRow && draggingRow !== currentRow) {
                 const tbody = document.querySelector('tbody');
-                tbody.insertBefore(draggingRow, currentRow.nextSibling);
+
+                if (draggingRow.rowIndex < currentRow.rowIndex) {
+                    tbody.insertBefore(draggingRow, currentRow.nextSibling);
+                } else {
+                    tbody.insertBefore(draggingRow, currentRow);
+                }
+
+                draggingRow.classList.remove('moving-up', 'moving-down', 'dragging');
+                currentRow.classList.remove('drop-target');
             }
+
+            draggingRow = null;
+        });
+
+        row.addEventListener('dragend', () => {
+            row.classList.remove('dragging', 'moving-up', 'moving-down');
         });
     });
 }
+
+
 
 function finishEditing() {
     const rows = document.querySelectorAll('tbody tr');
