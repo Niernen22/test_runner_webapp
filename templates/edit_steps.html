@@ -57,18 +57,36 @@
                 <label for="step_type">Select Step Type:</label><br>
                 <select id="step_type" name="step_type" onchange="showParametersForm()">
                     <option value="none">---select---</option>
+                    <option value="TRUNCATE_TABLE">Truncate Table</option>
                     <option value="TABLECOPY">Table Copy</option>
                     <option value="LM_JOB">LM Job</option>
                     <option value="STORED_PROCEDURE">Stored Procedure</option>
                 </select><br><br>
+                
+                <div id="TruncateForm" style="display: none;">
+                    <h3>Enter Parameters for TRUNCATE_TABLE</h3>
         
-                <div id="parametersForm" style="display: none;">
+                    <label for="truncate_schema">Schema:</label><br>
+                    <select id="truncate_schema" name="truncate_schema" onchange="getTablesForTargetSchema(this.value)">
+                        {% for username in usernames %}
+                        <option value="{{ username }}">{{ username }}</option>
+                        {% endfor %}
+                    </select><br><br>
+        
+                    <label for="truncate_table">Table:</label><br>
+                    <select id="truncate_table" name="truncate_table"></select><br><br>
+        
+                    <label for="date">Date (leave it empty for truncating the whole table):</label><br>
+                    <select id="date" name="date"></select><br><br>
+                </div>
+
+                <div id="TablecopyForm" style="display: none;">
                     <h3>Enter Parameters for TABLECOPY_PACKAGE.TABLECOPY</h3>
         
                     <label for="source_schema">Source Schema:</label><br>
                     <select id="source_schema" name="source_schema" onchange="getTablesForSourceSchema(this.value)">
-                        {% for username in usernames %}
-                        <option value="{{ username }}">{{ username }}</option>
+                        {% for prod_username in prod_usernames %}
+                        <option value="{{ prod_username }}">{{ prod_username }}</option>
                         {% endfor %}
                     </select><br><br>
         
