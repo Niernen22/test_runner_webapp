@@ -163,17 +163,16 @@ def add_test():
         connection = pool.acquire()
         cursor = connection.cursor()
 
-        new_id_query = "SELECT MAX(ID) FROM TESTS"
-        cursor.execute(new_id_query)
-        result = cursor.fetchone()
-        new_id = (result[0] if result[0] is not None else 0) + 1
-
         test_name = request.form['new_test_name']
 
-        query = "INSERT INTO TESTS (ID, NAME) VALUES (:id, :name)"
-        cursor.execute(query, {'id': new_id, 'name': test_name})
+        query = "INSERT INTO TESTS (ID, NAME) VALUES (TESTS_SEQ.NEXTVAL, :name)"
+        cursor.execute(query, {'name': test_name})
 
         connection.commit()
+
+        cursor.execute("SELECT TESTS_SEQ.CURRVAL FROM dual")
+        new_id = cursor.fetchone()[0]
+
         cursor.close()
         connection.close()
 
@@ -181,7 +180,6 @@ def add_test():
 
     except oracledb.Error as error:
         return f"Error inserting new test: {error}"
-
 
 
 
@@ -287,6 +285,10 @@ def edit_steps(test_id):
         cursor.execute(sql)
         usernames = [row[0] for row in cursor.fetchall()]
 
+        sql = "SELECT USERNAME FROM DBA_USERS@ODS_PROD"
+        cursor.execute(sql)
+        prod_usernames = [row[0] for row in cursor.fetchall()]
+
         sql = "SELECT MODULE FROM LM.INV_JOBS"
         cursor.execute(sql)
         modules = [row[0] for row in cursor.fetchall()]
@@ -305,7 +307,7 @@ def edit_steps(test_id):
 
         cursor.close()
 
-        return render_template('edit_steps.html', test_id=test_id, test_steps=test_steps_data, usernames=usernames, modules=modules, storedobject_names=storedobject_names, procedures_schemas=procedures_schemas, storedpackage_names=storedpackage_names)
+        return render_template('edit_steps.html', test_id=test_id, test_steps=test_steps_data, prod_usernames=prod_usernames, usernames=usernames, modules=modules, storedobject_names=storedobject_names, procedures_schemas=procedures_schemas, storedpackage_names=storedpackage_names)
 
     except oracledb.Error as error:
         return f"Error retrieving test steps: {error}"
@@ -351,33 +353,77 @@ def add_step(test_id):
         new_step_name = data.get('new_step_name')
         step_type = data.get('step_type')
         sql_code = ''
-        target_user = 'STA_TEST'
        
         def default_if_none(value, default=''):
             return value if value is not None else default
 
         if step_type == 'TABLECOPY':
+            target_user = 'TEST_RUNNER_REPO'
             source_schema = default_if_none(data.get('source_schema'))
             source_table = default_if_none(data.get('source_table'))
             target_schema = default_if_none(data.get('target_schema'))
             target_table = default_if_none(data.get('target_table'))
             truncate = default_if_none(data.get('truncate'))
             chosen_date = default_if_none(data.get('date'))
+
+            if chosen_date is None:
+                sql_code = f"""
+                BEGIN 
+                    TABLECOPY_PACKAGE.TABLECOPY(
+                        p_source_schema => '{source_schema}', 
+                        p_source_table => '{source_table}', 
+                        p_target_schema => '{target_schema}', 
+                        p_target_table => '{target_table}', 
+                        p_truncate => {truncate}, 
+                        p_tnd_filter => NULL
+                    ); 
+                END;
+                """
+            else:
+                sql_code = f"""
+                BEGIN 
+                    TABLECOPY_PACKAGE.TABLECOPY(
+                        p_source_schema => '{source_schema}', 
+                        p_source_table => '{source_table}', 
+                        p_target_schema => '{target_schema}', 
+                        p_target_table => '{target_table}', 
+                        p_truncate => {truncate}, 
+                        p_tnd_filter => TO_DATE('{chosen_date}', 'yyyy-mm-dd')
+                    ); 
+                END;
+                """
+
         
-            sql_code = f"""
-            BEGIN 
-                TABLECOPY_PACKAGE.TABLECOPY(
-                    '{source_schema}', 
-                    '{source_table}', 
-                    '{target_schema}', 
-                    '{target_table}', 
-                    '{truncate}', 
-                    TO_DATE('{chosen_date}', 'yyyy-mm-dd')
-                ); 
-            END;
-            """
+        elif step_type == 'TRUNCATE_TABLE':
+            target_user = 'TEST_RUNNER_REPO'
+            target_schema = default_if_none(data.get('truncate_schema'))
+            target_table = default_if_none(data.get('truncate_table'))
+            chosen_date = default_if_none(data.get('date'))
+
+            if chosen_date is None:
+                sql_code = f"""
+                BEGIN 
+                    SARTASNADI.TRUNCATE_TND_TABLE_PROCEDURE(
+                        '{target_schema}', 
+                        '{target_table}', 
+                        NULL
+                    ); 
+                END;
+                """
+            else:
+                sql_code = f"""
+                BEGIN 
+                    SARTASNADI.TRUNCATE_TND_TABLE_PROCEDURE(
+                        '{target_schema}', 
+                        '{target_table}', 
+                        TO_DATE('{chosen_date}', 'yyyy-mm-dd')
+                    ); 
+                END;
+                """
+
         
         elif step_type == 'LM_JOB':
+            target_user = 'LM'
             module = default_if_none(data.get('module'))
             _type = default_if_none(data.get('type'))
             name = default_if_none(data.get('name'))
@@ -398,11 +444,13 @@ def add_step(test_id):
             storedprocedure_type = default_if_none(data.get('storedprocedure_type'))
             parameters = ', '.join([f"'{default_if_none(value)}'" for value in data.get('parameters', {}).values()])
             if storedprocedure_type == 'Function_or_Procedure':
+                target_user = default_if_none(data.get('procedures_schema'))
                 procedures_schema = default_if_none(data.get('procedures_schema'))
                 storedobject_name = default_if_none(data.get('storedobject_name'))
                 sql_code = f"BEGIN {procedures_schema}.{storedobject_name}({parameters}); END;"
         
             elif storedprocedure_type == 'Package':
+                target_user = default_if_none(data.get('procedures_schema_package'))
                 procedures_schema_package = default_if_none(data.get('procedures_schema_package'))
                 storedpackage_name = default_if_none(data.get('storedpackage_name'))
                 storedobject_name_package = default_if_none(data.get('storedobject_name_package'))
@@ -410,16 +458,14 @@ def add_step(test_id):
 
         connection = pool.acquire()
         cursor = connection.cursor()
-        
-        new_id_query = "SELECT MAX(ID) FROM TEST_STEPS"
-        cursor.execute(new_id_query)
-        result = cursor.fetchone()
-        new_id = (result[0] if result[0] is not None else 0) + 1
 
         new_order_query = "SELECT MAX(ORDERNUMBER) FROM TEST_STEPS WHERE TEST_ID = :test_id"
-        cursor.execute(new_order_query, (test_id,))
+        cursor.execute(new_order_query, {'test_id': test_id})
         result = cursor.fetchone()
         new_order_number = (result[0] if result[0] is not None else 0) + 1
+
+        cursor.execute("SELECT TEST_STEPS_SEQ.NEXTVAL FROM dual")
+        new_id = cursor.fetchone()[0] 
 
         sql = "INSERT INTO TEST_STEPS (ID, TEST_ID, NAME, ORDERNUMBER, STATUS, TYPE, SQL_CODE, TARGET_USER) VALUES (:1, :2, :3, :4, :5, :6, :7, :8)"
         data = (new_id, test_id, new_step_name, new_order_number, 'ADDED', step_type, sql_code, target_user)
@@ -428,6 +474,7 @@ def add_step(test_id):
         connection.commit()
 
         cursor.close()
+        connection.close()
 
         return jsonify({'success': True, 'redirect_url': url_for('edit_steps', test_id=test_id)})
 
@@ -464,6 +511,23 @@ def get_tables_for_schema():
         connection = pool.acquire()
         cursor = connection.cursor()
         sql = "SELECT table_name FROM all_tables WHERE owner = :schema"
+        cursor.execute(sql, {'schema': selected_schema})
+        table_names = [row[0] for row in cursor.fetchall()]
+        cursor.close()
+        pool.release(connection)
+        return json.dumps(table_names)
+    except Exception as e:
+        return json.dumps({'error': str(e)})
+
+
+@app.route('/get_tables_for_prod_schema', methods=['POST'])
+@login_required
+def get_tables_for_prod_schema():
+    selected_schema = request.json['schema']
+    try:
+        connection = pool.acquire()
+        cursor = connection.cursor()
+        sql = "SELECT table_name FROM all_tables@ods_prod WHERE owner = :schema"
         cursor.execute(sql, {'schema': selected_schema})
         table_names = [row[0] for row in cursor.fetchall()]
         cursor.close()
@@ -568,7 +632,7 @@ def get_workdays():
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
-        sql = "SELECT DISTINCT(T_DATE) FROM STA.TR_DATE WHERE WORK_DAY = 'Y'"
+        sql = "SELECT T_DATE FROM STA.TR_DATE WHERE WORK_DAY = 'Y' AND T_DATE BETWEEN ADD_MONTHS(TRUNC(SYSDATE, 'YEAR'), -12) AND LAST_DAY(SYSDATE) ORDER BY T_DATE DESC"
         cursor.execute(sql)
         workdays = [row[0].strftime("%Y-%m-%d") for row in cursor.fetchall()]
         cursor.close()
