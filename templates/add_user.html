@@ -11,10 +11,21 @@
     <a href="{{ url_for('index') }}"><button>Main Page</button></a>
     <form action="{{ url_for('add_user') }}" method="post">
         <input type="text" name="username" placeholder="Username" required>
-        <input type="password" name="password" placeholder="Password" required>
-        <label for="is_admin">Admin?</label>
-        <input type="checkbox" id="is_admin" name="is_admin" value="True">
+        <input type="password" name="password" placeholder="Password" required>    
+        <div class="checkbox-wrapper-4">
+            <input type="checkbox" id="is_admin" name="is_admin" value="True" class="inp-cbx"/>
+            <label for="is_admin" class="cbx">
+                <span>
+                    <svg width="12px" height="10px" viewBox="0 0 12 10">
+                        <polyline points="1.5 6 4.5 9 10.5 1"></polyline>
+                    </svg>
+                </span>
+                <span>Admin?</span>
+            </label>
+        </div>
         <button type="submit">Add User</button>
     </form>
 </body>
 </html>
+
+
