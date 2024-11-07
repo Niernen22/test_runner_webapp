@@ -1,21 +1,30 @@
 function showParametersForm() {
     let selectedType = document.getElementById('step_type').value;
     if (selectedType === 'TABLECOPY') {
-        document.getElementById('parametersForm').style.display = 'block';
+        document.getElementById('TablecopyForm').style.display = 'block';
         document.getElementById('LMparametersForm').style.display = 'none';
         document.getElementById('StoredProcedureForm').style.display = 'none';
+        document.getElementById('TruncateForm').style.display = 'none';
     } else if (selectedType === 'LM_JOB') {
-        document.getElementById('parametersForm').style.display = 'none';
+        document.getElementById('TablecopyForm').style.display = 'none';
         document.getElementById('LMparametersForm').style.display = 'block';
         document.getElementById('StoredProcedureForm').style.display = 'none';
-    } else if (selectedType === 'STORED_PROCEDURE') {
-        document.getElementById('parametersForm').style.display = 'none'; 
-        document.getElementById('LMparametersForm').style.display = 'none';
-        document.getElementById('StoredProcedureForm').style.display = 'block';
-    } else {
-        document.getElementById('parametersForm').style.display = 'none';
+        document.getElementById('TruncateForm').style.display = 'none';
+    } else if (selectedType === 'TRUNCATE_TABLE') {
+        document.getElementById('TablecopyForm').style.display = 'none';
         document.getElementById('LMparametersForm').style.display = 'none';
         document.getElementById('StoredProcedureForm').style.display = 'none';
+        document.getElementById('TruncateForm').style.display = 'block';
+    } else if (selectedType === 'STORED_PROCEDURE') {
+        document.getElementById('TablecopyForm').style.display = 'none'; 
+        document.getElementById('LMparametersForm').style.display = 'none';
+        document.getElementById('StoredProcedureForm').style.display = 'block';
+        document.getElementById('TruncateForm').style.display = 'none';
+    } else {
+        document.getElementById('TablecopyForm').style.display = 'none';
+        document.getElementById('LMparametersForm').style.display = 'none';
+        document.getElementById('StoredProcedureForm').style.display = 'none';
+        document.getElementById('TruncateForm').style.display = 'none';
     }
 }
 
@@ -182,10 +191,32 @@ function getTablesForTargetSchema(selectedSchema) {
     .catch(error => console.error('Error:', error));
 }
 
+function getTablesForTruncateSchema(selectedSchema) {
+    var truncateTableSelect = document.getElementById('truncate_table');
+    fetch('/get_tables_for_schema', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ schema: selectedSchema })
+    })
+    .then(response => response.json())
+    .then(data => {
+        truncateTableSelect.innerHTML = '';
+        data.forEach(function(table) {
+            var option = document.createElement('option');
+            option.value = table;
+            option.textContent = table;
+            truncateTableSelect.appendChild(option);
+        });
+    })
+    .catch(error => console.error('Error:', error));
+}
+
 
 function getTablesForSourceSchema(selectedSchema) {
     var sourceTableSelect = document.getElementById('source_table');
-    fetch('/get_tables_for_schema', {
+    fetch('/get_tables_for_prod_schema', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -218,6 +249,14 @@ document.addEventListener('DOMContentLoaded', function() {
     })
     .then(data => {
         var dateSelect = document.getElementById('date');
+
+        var defaultOption = document.createElement('option');
+        defaultOption.value = "";
+        defaultOption.textContent = "no-date-selected";
+        defaultOption.disabled = true;
+        defaultOption.selected = true;
+        dateSelect.appendChild(defaultOption);
+
         data.forEach(function(day) {
             var option = document.createElement('option');
             option.value = day;
@@ -227,6 +266,7 @@ document.addEventListener('DOMContentLoaded', function() {
     })
     .catch(error => console.error('Error:', error));
 });
+
 
 
 function getNamesForModule(selectedModule) {
@@ -324,6 +364,10 @@ function submitFormData() {
         formData.target_table = document.getElementById('target_table').value.trim();
         formData.truncate = document.getElementById('truncate').value.trim();
         formData.date = document.getElementById('date').value.trim();
+    } else if (formData.step_type === 'TRUNCATE_TABLE') {
+            formData.target_schema = document.getElementById('target_schema').value.trim();
+            formData.target_table = document.getElementById('target_table').value.trim();
+            formData.date = document.getElementById('date').value.trim();
     } else if (formData.step_type === 'LM_JOB') {
         formData.module = document.getElementById('module').value.trim();
         formData.type = document.getElementById('type').textContent.trim();
