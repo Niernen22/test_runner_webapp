@@ -25,10 +25,20 @@ At the moment the following is available:
 - Job Steps Log Details: Job Steps Logging (Run ID, Step ID, Step Name, Event, Event Time, Output Message, Error Message, Job Name)
 
 App design:
-![login](https://github.com/user-attachments/assets/358410dc-1e06-40f8-bf8f-c36cd4863725)
-![index](https://github.com/user-attachments/assets/25eba555-7ff0-4e6c-8a78-f94e13540efe)
-![job_steps_details](https://github.com/user-attachments/assets/6b4f6d08-d731-40bb-8f45-117794035d0c)
-![edit_steps](https://github.com/user-attachments/assets/be17c308-bbca-43a1-9b21-bdf3f4165e18)
+![login](https://github.com/user-attachments/assets/3aaab1d8-2008-493a-95d8-759e03529f13)
+![index](https://github.com/user-attachments/assets/18e5d83b-29f3-4bee-b851-8ca6bc678d22)
+![manage_users](https://github.com/user-attachments/assets/8f34d374-a253-4364-b1ae-158188ba9097)
+![add_user](https://github.com/user-attachments/assets/39cd0346-e06c-4580-95f7-0e0d1016668e)
+![delete_user](https://github.com/user-attachments/assets/fd087ce4-9dc2-4428-bdca-4ae50c1f8051)
+![test_steps](https://github.com/user-attachments/assets/3b6cc62b-7c6e-4edf-a6cd-c9bef8b5a862)
+![edit_steps](https://github.com/user-attachments/assets/275d1879-5c48-4fff-a8fc-f35d24824713)
+![add_step_package](https://github.com/user-attachments/assets/082c2262-ec81-4749-8bbd-325b804d8766)
+![add_step_lm](https://github.com/user-attachments/assets/aa63ad2c-4232-43ef-b22d-e1be173aa239)
+![add_step_tablecopy](https://github.com/user-attachments/assets/0c5f396b-fcc3-4aa8-beb0-6f388e01332d)
+![notice_of_adding](https://github.com/user-attachments/assets/a3eda36d-c974-4af2-b793-1395f2d6479c)
+![edit_steps_order](https://github.com/user-attachments/assets/49f23b83-a55a-4690-b13a-f9eff62dc586)
+![run_test](https://github.com/user-attachments/assets/8bc06e9f-e531-4c2f-9698-3a8b3834e466)
+
 
 Tablecopy package:
 Copying a partitioned table from one Oracle database into an other.
