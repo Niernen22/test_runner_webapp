@@ -1,9 +1,7 @@
 CREATE OR REPLACE PACKAGE BODY TEST_RUNNER_REPO.TEST_PACKAGE IS
-  v_name VARCHAR2(50);
-  v_sqlcode TEST_STEPS.SQL_CODE%TYPE;
-  v_targetuser TEST_STEPS.TARGET_USER%TYPE;
 --------------------------------------------------------------------------------------------------------------------------------------------------------
-  PROCEDURE SCHEDULER_JOBLOG IS
+  PROCEDURE SCHEDULER_JOBLOG (v_name IN VARCHAR2, v_sqlcode IN TEST_STEPS.SQL_CODE%TYPE, 
+  v_targetuser in TEST_STEPS.TARGET_USER%TYPE, v_schstatus IN OUT VARCHAR2) IS
    v_count NUMBER := 0;
   BEGIN
     DBMS_SCHEDULER.create_job (
@@ -32,7 +30,12 @@ CREATE OR REPLACE PACKAGE BODY TEST_RUNNER_REPO.TEST_PACKAGE IS
     DBMS_OUTPUT.PUT_LINE(v_schstatus);
   END SCHEDULER_JOBLOG;
 --------------------------------------------------------------------------------------------------------------------------------------------------------
-  PROCEDURE STEP_RUNNER(v_id IN TESTS.ID%TYPE, v_run_id IN NUMBER) IS
+  PROCEDURE STEP_RUNNER(v_id IN TESTS.ID%TYPE, v_run_id IN NUMBER, v_start_time OUT TIMESTAMP, 
+  v_end_time OUT TIMESTAMP, v_schstatus OUT VARCHAR2, v_error OUT VARCHAR2) IS
+  v_sqlcode TEST_STEPS.SQL_CODE%TYPE;
+  v_targetuser TEST_STEPS.TARGET_USER%TYPE;
+  v_name VARCHAR2(50);
+  v_output VARCHAR2(4000);
   BEGIN
     UPDATE TEST_STEPS
     SET STATUS = 'INIT'
@@ -61,7 +64,11 @@ CREATE OR REPLACE PACKAGE BODY TEST_RUNNER_REPO.TEST_PACKAGE IS
       COMMIT;
 
       -- SCHEDULER_JOBLOG PROCEDURE CALL
-      TEST_PACKAGE.SCHEDULER_JOBLOG;
+      TEST_PACKAGE.SCHEDULER_JOBLOG(
+        v_name => v_name, 
+        v_sqlcode => v_sqlcode, 
+        v_targetuser => v_targetuser, 
+        v_schstatus => v_schstatus);
 
       SELECT ERRORS INTO v_error
       FROM DBA_SCHEDULER_JOB_RUN_DETAILS
@@ -86,6 +93,10 @@ CREATE OR REPLACE PACKAGE BODY TEST_RUNNER_REPO.TEST_PACKAGE IS
       WHERE job_name = UPPER(v_name)
       AND OWNER = v_targetuser;
       DBMS_OUTPUT.PUT_LINE(v_output);
+      
+      IF INSTR(v_output, 'Failed') > 0 THEN
+      v_schstatus := 'FAILED';
+      END IF;
 
       UPDATE TEST_STEPS
       SET STATUS = v_schstatus, start_time = v_start_time, end_time = v_end_time
@@ -96,11 +107,19 @@ CREATE OR REPLACE PACKAGE BODY TEST_RUNNER_REPO.TEST_PACKAGE IS
       INSERT INTO STEP_RUN_LOG (RUN_ID, STEP_ID, STEP_NAME, EVENT, EVENT_TIME, OUTPUT_MESSAGE, ERROR_MESSAGE, JOBNAME)
       VALUES (v_run_id, steporder.id, steporder.name, v_schstatus, SYSTIMESTAMP, v_output, v_error, v_targetuser || v_name);
       COMMIT;
+
+      IF v_schstatus != 'SUCCEEDED' THEN
+        EXIT;
+      END IF;
     END LOOP;
   END STEP_RUNNER;
 --------------------------------------------------------------------------------------------------------------------------------------------------------
   PROCEDURE RUN_TEST(v_id IN TESTS.ID%TYPE, v_run_id NUMBER) IS
     v_test_name TESTS.NAME%TYPE;
+    v_start_time TIMESTAMP;
+    v_end_time TIMESTAMP; 
+    v_schstatus VARCHAR2(4000); 
+    v_error VARCHAR2(4000);
     PRAGMA AUTONOMOUS_TRANSACTION;
   BEGIN
     -- VALUES
@@ -112,7 +131,13 @@ CREATE OR REPLACE PACKAGE BODY TEST_RUNNER_REPO.TEST_PACKAGE IS
     COMMIT;
 
     -- STEP_RUNNER PROCEDURE CALL
-    TEST_PACKAGE.STEP_RUNNER(v_id, v_run_id);
+    TEST_PACKAGE.STEP_RUNNER(
+        v_id => v_id, 
+        v_run_id => v_run_id, 
+        v_start_time => v_start_time, 
+        v_end_time => v_end_time, 
+        v_schstatus => v_schstatus, 
+        v_error => v_error);
 
     UPDATE TESTS
     SET STATUS = v_schstatus, START_TIME = v_start_time, END_TIME = v_end_time
@@ -123,6 +148,7 @@ CREATE OR REPLACE PACKAGE BODY TEST_RUNNER_REPO.TEST_PACKAGE IS
     INSERT INTO TEST_RUN_LOG (RUN_ID, TEST_ID, TEST_NAME, EVENT, EVENT_TIME, ERROR_MESSAGE)
     VALUES (v_run_id, v_id, v_test_name, v_schstatus, SYSTIMESTAMP, v_error);
     COMMIT;
+    
   END RUN_TEST;
 --------------------------------------------------------------------------------------------------------------------------------------------------------
   FUNCTION TEST_RUNNER(v_id IN TESTS.ID%TYPE) RETURN NUMBER IS
@@ -177,4 +203,3 @@ CREATE OR REPLACE PACKAGE BODY TEST_RUNNER_REPO.TEST_PACKAGE IS
   END TEST_RUNNER;
 
 END TEST_PACKAGE;
-/
