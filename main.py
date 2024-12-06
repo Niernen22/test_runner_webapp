@@ -140,7 +140,7 @@ def index():
             query = "SELECT * FROM TESTS WHERE NAME LIKE '%' || :search_name || '%' ORDER BY NAME"
             cursor.execute(query, {'search_name': search_name})
         else:
-            query = "SELECT * FROM TESTS ORDER BY ID DESC"
+            query = "SELECT * FROM TESTS ORDER BY NAME"
             cursor.execute(query)
 
         tests = []
@@ -250,7 +250,17 @@ def test_steps(test_id):
         connection = pool.acquire()
         cursor = connection.cursor()
 
-        query = "SELECT * FROM TEST_STEPS WHERE TEST_ID = :test_id ORDER BY ORDERNUMBER"
+        query = """
+        SELECT ts.*, 
+               (SELECT srl.OUTPUT_MESSAGE
+                FROM STEP_RUN_LOG srl 
+                WHERE srl.STEP_ID = ts.ID 
+                ORDER BY srl.EVENT_TIME DESC 
+                FETCH FIRST ROW ONLY) AS LATEST_OUTPUT
+        FROM TEST_STEPS ts
+        WHERE ts.TEST_ID = :test_id
+        ORDER BY ts.ORDERNUMBER
+        """
         cursor.execute(query, test_id=test_id)
 
         test_steps_data = []
@@ -264,6 +274,7 @@ def test_steps(test_id):
     
     except oracledb.Error as error:
         return f"Error retrieving test steps: {error}"
+
 
 
 
@@ -281,27 +292,27 @@ def edit_steps(test_id):
         for row in cursor.fetchall():
             test_steps_data.append(dict(zip(column_names, row)))
 
-        sql = "SELECT USERNAME FROM DBA_USERS ORDER BY USERNAME ASC"
+        sql = "SELECT USERNAME FROM DBA_USERS"
         cursor.execute(sql)
         usernames = [row[0] for row in cursor.fetchall()]
 
-        sql = "SELECT USERNAME FROM DBA_USERS@ODS_PROD ORDER BY USERNAME ASC"
+        sql = "SELECT USERNAME FROM DBA_USERS@ODS_PROD"
         cursor.execute(sql)
         prod_usernames = [row[0] for row in cursor.fetchall()]
 
-        sql = "SELECT DISTINCT(MODULE) FROM LM.INV_JOBS ORDER BY MODULE ASC"
+        sql = "SELECT MODULE FROM LM.INV_JOBS"
         cursor.execute(sql)
         modules = [row[0] for row in cursor.fetchall()]
 
-        sql = "SELECT DISTINCT(OBJECT_NAME) FROM DBA_PROCEDURES WHERE OBJECT_TYPE IN ('FUNCTION' , 'PROCEDURE') ORDER BY OBJECT_NAME ASC"
+        sql = "SELECT DISTINCT(OBJECT_NAME) FROM DBA_PROCEDURES WHERE OBJECT_TYPE IN ('FUNCTION' , 'PROCEDURE')"
         cursor.execute(sql)
         storedobject_names = [row[0] for row in cursor.fetchall()]
 
-        sql = "SELECT DISTINCT(OWNER) FROM DBA_PROCEDURES ORDER BY OWNER ASC"
+        sql = "SELECT DISTINCT(OWNER) FROM DBA_PROCEDURES"
         cursor.execute(sql)
         procedures_schemas = [row[0] for row in cursor.fetchall()]
 
-        sql = "SELECT PROCEDURE_NAME FROM DBA_PROCEDURES WHERE OBJECT_TYPE = 'PACKAGE' ORDER BY PROCEDURE_NAME ASC"
+        sql = "SELECT PROCEDURE_NAME FROM DBA_PROCEDURES WHERE OBJECT_TYPE = 'PACKAGE'"
         cursor.execute(sql)
         storedpackage_names = [row[0] for row in cursor.fetchall()]
 
@@ -394,33 +405,32 @@ def add_step(test_id):
                 """
 
         
-        #elif step_type == 'TRUNCATE_TABLE':
-        #    target_user = 'TEST_RUNNER_REPO'
-        #    target_schema = default_if_none(data.get('truncate_schema'))
-        #    target_table = default_if_none(data.get('truncate_table'))
-        #    chosen_date = default_if_none(data.get('truncate_date'))
+        elif step_type == 'TRUNCATE_TABLE':
+            target_user = 'TEST_RUNNER_REPO'
+            truncate_schema = default_if_none(data.get('truncate_schema'))
+            truncate_table = default_if_none(data.get('truncate_table'))
+            truncate_date = default_if_none(data.get('truncate_date'))
 
-        #    if chosen_date is None:
-        #        sql_code = f"""
-        #        BEGIN 
-        #            TRUNCATE_TND_TABLE_PROCEDURE(
-        #                '{target_schema}', 
-        #                '{target_table}', 
-        #                NULL
-        #            ); 
-        #        END;
-        #        """
-        #    else:
-        #        sql_code = f"""
-        #        BEGIN 
-        #            TRUNCATE_TND_TABLE_PROCEDURE(
-        #                '{target_schema}', 
-        #                '{target_table}', 
-        #                TO_DATE('{chosen_date}', 'yyyy-mm-dd')
-        #            ); 
-        #        END;
-        #        """
-        #    
+            if truncate_date is None:
+                sql_code = f"""
+                BEGIN
+                    {target_user}.TRUNCATE_TND_TABLE(
+                        p_CEL_SEMA => '{truncate_schema}', 
+                        p_CEL_TABLA => '{truncate_table}', 
+                        p_TND_SZURES => NULL
+                    );
+                END;
+                """
+            else:
+                sql_code = f"""
+                BEGIN
+                    {target_user}.TRUNCATE_TND_TABLE(
+                        p_CEL_SEMA => '{truncate_schema}', 
+                        p_CEL_TABLA => '{truncate_table}', 
+                        p_TND_SZURES => TO_DATE('{truncate_date}', 'yyyy-mm-dd')
+                    );
+                END;
+                """
 
 
         
@@ -512,7 +522,7 @@ def get_tables_for_schema():
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
-        sql = "SELECT table_name FROM all_tables WHERE owner = :schema order by table_name asc"
+        sql = "SELECT table_name FROM all_tables WHERE owner = :schema"
         cursor.execute(sql, {'schema': selected_schema})
         table_names = [row[0] for row in cursor.fetchall()]
         cursor.close()
@@ -529,7 +539,7 @@ def get_tables_for_prod_schema():
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
-        sql = "SELECT table_name FROM all_tables@ods_prod WHERE owner = :schema order by table_name asc"
+        sql = "SELECT table_name FROM all_tables@ods_prod WHERE owner = :schema"
         cursor.execute(sql, {'schema': selected_schema})
         table_names = [row[0] for row in cursor.fetchall()]
         cursor.close()
@@ -546,7 +556,7 @@ def get_procedures_for_schema():
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
-        sql = "SELECT OBJECT_NAME FROM DBA_PROCEDURES WHERE OBJECT_TYPE IN ('FUNCTION', 'PROCEDURE') AND OWNER = :schema order by object_name asc"
+        sql = "SELECT OBJECT_NAME FROM DBA_PROCEDURES WHERE OBJECT_TYPE IN ('FUNCTION', 'PROCEDURE') AND OWNER = :schema"
         cursor.execute(sql, {'schema': selected_schema})
         procedure_names = [row[0] for row in cursor.fetchall()]
         cursor.close()
@@ -600,7 +610,7 @@ def get_packages_for_schema():
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
-        sql = "SELECT OBJECT_NAME FROM DBA_PROCEDURES WHERE OBJECT_TYPE = 'PACKAGE' AND OWNER = :schema order by object_name asc"
+        sql = "SELECT OBJECT_NAME FROM DBA_PROCEDURES WHERE OBJECT_TYPE = 'PACKAGE' AND OWNER = :schema"
         cursor.execute(sql, {'schema': selected_schema})
         package_names = [row[0] for row in cursor.fetchall()]
         cursor.close()
@@ -618,7 +628,7 @@ def get_procedures_for_package():
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
-        sql = "SELECT PROCEDURE_NAME FROM DBA_PROCEDURES WHERE OBJECT_TYPE = 'PACKAGE' AND OWNER = :schema AND OBJECT_NAME = :package order by procedure_name asc"
+        sql = "SELECT PROCEDURE_NAME FROM DBA_PROCEDURES WHERE OBJECT_TYPE = 'PACKAGE' AND OWNER = :schema AND OBJECT_NAME = :package"
         cursor.execute(sql, {'schema': selected_schema, 'package': selected_package})
         procedure_names = [row[0] for row in cursor.fetchall()]
         cursor.close()
@@ -651,7 +661,7 @@ def get_names_for_module():
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
-        sql = "SELECT NAME FROM LM.INV_JOBS WHERE MODULE = :module order by name asc"
+        sql = "SELECT NAME FROM LM.INV_JOBS WHERE MODULE = :module"
         cursor.execute(sql, {'module': selected_module})
         names = [row[0] for row in cursor.fetchall()]
         cursor.close()
@@ -668,7 +678,7 @@ def get_types_for_module():
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
-        sql = "SELECT TYPE FROM LM.INV_MODULE WHERE MODULE = :module order by type asc"
+        sql = "SELECT TYPE FROM LM.INV_MODULE WHERE MODULE = :module"
         cursor.execute(sql, {'module': selected_module})
         types = [row[0] for row in cursor.fetchall()]
         cursor.close()
