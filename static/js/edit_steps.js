@@ -268,6 +268,37 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 
+document.addEventListener('DOMContentLoaded', function() {
+    fetch('/get_workdays', {
+        method: 'GET',
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return response.json();
+    })
+    .then(data => {
+        var dateSelect = document.getElementById('truncate_date');
+
+        var defaultOption = document.createElement('option');
+        defaultOption.value = "";
+        defaultOption.textContent = "no-date-selected";
+        defaultOption.disabled = true;
+        defaultOption.selected = true;
+        dateSelect.appendChild(defaultOption);
+
+        data.forEach(function(day) {
+            var option = document.createElement('option');
+            option.value = day;
+            option.textContent = day;
+            dateSelect.appendChild(option);
+        });
+    })
+    .catch(error => console.error('Error:', error));
+});
+
+
 
 function getNamesForModule(selectedModule) {
     var nameSelect = document.getElementById('name');
@@ -365,9 +396,9 @@ function submitFormData() {
         formData.truncate = document.getElementById('truncate').value.trim();
         formData.date = document.getElementById('date').value.trim();
     } else if (formData.step_type === 'TRUNCATE_TABLE') {
-            formData.target_schema = document.getElementById('target_schema').value.trim();
-            formData.target_table = document.getElementById('target_table').value.trim();
-            formData.date = document.getElementById('date').value.trim();
+            formData.truncate_schema = document.getElementById('truncate_schema').value.trim();
+            formData.truncate_table = document.getElementById('truncate_table').value.trim();
+            formData.truncate_date = document.getElementById('truncate_date').value.trim();
     } else if (formData.step_type === 'LM_JOB') {
         formData.module = document.getElementById('module').value.trim();
         formData.type = document.getElementById('type').textContent.trim();
