@@ -67,7 +67,7 @@
                     <h3>Enter Parameters for TRUNCATE_TABLE</h3>
         
                     <label for="truncate_schema">Schema:</label><br>
-                    <select id="truncate_schema" name="truncate_schema" onchange="getTablesForTargetSchema(this.value)">
+                    <select id="truncate_schema" name="truncate_schema" onchange="getTablesForTruncateSchema(this.value)">
                         {% for username in usernames %}
                         <option value="{{ username }}">{{ username }}</option>
                         {% endfor %}
@@ -76,8 +76,8 @@
                     <label for="truncate_table">Table:</label><br>
                     <select id="truncate_table" name="truncate_table"></select><br><br>
         
-                    <label for="date">Date (leave it empty for truncating the whole table):</label><br>
-                    <select id="date" name="date"></select><br><br>
+                    <label for="truncate_date">Date (leave it empty for truncating the whole table):</label><br>
+                    <select id="truncate_date" name="truncate_date"></select><br><br>
                 </div>
 
                 <div id="TablecopyForm" style="display: none;">
@@ -124,8 +124,7 @@
                         {% endfor %}
                     </select><br><br>
 
-                    <label for="type">Type:</label><br>
-                    <span id="type" name="type"></span><br><br>
+                    <p>Type: <span id="type"></span></p><br>
 
                     <label for="name">Select Name:</label><br>
                     <select id="name" name="name"></select><br><br>
@@ -159,7 +158,7 @@
                         </select><br><br>
 
 
-                        <label for="parameters">Parameters:</label><br>
+                        <p>Parameters:</p>
                         <div id="parameters"></div><br><br>
 
                     </div>
@@ -187,7 +186,7 @@
                             {% endfor %}
                         </select><br><br>
                     
-                        <label for="parameters_package">Parameters:</label><br>
+                        <p>Parameters:</p>
                         <div id="parameters_package"></div><br><br>
                     </div>
                 </div>
