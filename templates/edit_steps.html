@@ -56,14 +56,14 @@
 
                 <label for="step_type">Select Step Type:</label><br>
                 <select id="step_type" name="step_type" onchange="showParametersForm()">
-                    <option value="none">---select---</option>
-                    <option value="TRUNCATE_TABLE">Truncate Table</option>
+                    <option value="none">-- Select an option --</option>
+                    <!--<option value="TRUNCATE_TABLE">Truncate Table</option> -->
                     <option value="TABLECOPY">Table Copy</option>
                     <option value="LM_JOB">LM Job</option>
                     <option value="STORED_PROCEDURE">Stored Procedure</option>
                 </select><br><br>
                 
-                <div id="TruncateForm" style="display: none;">
+                <!-- <div id="TruncateForm" style="display: none;">
                     <h3>Enter Parameters for TRUNCATE_TABLE</h3>
         
                     <label for="truncate_schema">Schema:</label><br>
@@ -78,7 +78,7 @@
         
                     <label for="truncate_date">Date (leave it empty for truncating the whole table):</label><br>
                     <select id="truncate_date" name="truncate_date"></select><br><br>
-                </div>
+                </div> -->
 
                 <div id="TablecopyForm" style="display: none;">
                     <h3>Enter Parameters for TABLECOPY_PACKAGE.TABLECOPY</h3>
