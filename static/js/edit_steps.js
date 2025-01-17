@@ -531,4 +531,3 @@ function finishEditing() {
 }
 
 document.addEventListener('DOMContentLoaded', enableDragAndDrop);
-
