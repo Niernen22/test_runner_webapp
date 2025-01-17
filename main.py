@@ -140,7 +140,7 @@ def index():
             query = "SELECT * FROM TESTS WHERE NAME LIKE '%' || :search_name || '%' ORDER BY NAME"
             cursor.execute(query, {'search_name': search_name})
         else:
-            query = "SELECT * FROM TESTS ORDER BY NAME"
+            query = "SELECT * FROM TESTS ORDER BY ID DESC"
             cursor.execute(query)
 
         tests = []
@@ -256,7 +256,12 @@ def test_steps(test_id):
                 FROM STEP_RUN_LOG srl 
                 WHERE srl.STEP_ID = ts.ID 
                 ORDER BY srl.EVENT_TIME DESC 
-                FETCH FIRST ROW ONLY) AS LATEST_OUTPUT
+                FETCH FIRST ROW ONLY) AS LATEST_OUTPUT,
+               (SELECT srl.RUN_ID
+                FROM STEP_RUN_LOG srl 
+                WHERE srl.STEP_ID = ts.ID 
+                ORDER BY srl.EVENT_TIME DESC 
+                FETCH FIRST ROW ONLY) AS LATEST_RUN_ID
         FROM TEST_STEPS ts
         WHERE ts.TEST_ID = :test_id
         ORDER BY ts.ORDERNUMBER
@@ -278,6 +283,7 @@ def test_steps(test_id):
 
 
 
+
 @app.route('/edit_steps/<test_id>')
 @login_required
 def edit_steps(test_id):
@@ -292,29 +298,29 @@ def edit_steps(test_id):
         for row in cursor.fetchall():
             test_steps_data.append(dict(zip(column_names, row)))
 
-        sql = "SELECT USERNAME FROM DBA_USERS"
+        sql = "SELECT USERNAME FROM DBA_USERS ORDER BY USERNAME ASC"
         cursor.execute(sql)
-        usernames = [row[0] for row in cursor.fetchall()]
+        usernames = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
 
-        sql = "SELECT USERNAME FROM DBA_USERS@ODS_PROD"
+        sql = "SELECT USERNAME FROM DBA_USERS@ODS_PROD ORDER BY USERNAME ASC"
         cursor.execute(sql)
-        prod_usernames = [row[0] for row in cursor.fetchall()]
+        prod_usernames = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
 
-        sql = "SELECT MODULE FROM LM.INV_JOBS"
+        sql = "SELECT DISTINCT(MODULE) FROM LM.INV_JOBS ORDER BY MODULE ASC"
         cursor.execute(sql)
-        modules = [row[0] for row in cursor.fetchall()]
+        modules = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
 
-        sql = "SELECT DISTINCT(OBJECT_NAME) FROM DBA_PROCEDURES WHERE OBJECT_TYPE IN ('FUNCTION' , 'PROCEDURE')"
+        sql = "SELECT DISTINCT(OBJECT_NAME) FROM DBA_PROCEDURES WHERE OBJECT_TYPE IN ('FUNCTION' , 'PROCEDURE') ORDER BY OBJECT_NAME ASC"
         cursor.execute(sql)
-        storedobject_names = [row[0] for row in cursor.fetchall()]
+        storedobject_names = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
 
-        sql = "SELECT DISTINCT(OWNER) FROM DBA_PROCEDURES"
+        sql = "SELECT DISTINCT(OWNER) FROM DBA_PROCEDURES ORDER BY OWNER ASC"
         cursor.execute(sql)
-        procedures_schemas = [row[0] for row in cursor.fetchall()]
+        procedures_schemas = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
 
-        sql = "SELECT PROCEDURE_NAME FROM DBA_PROCEDURES WHERE OBJECT_TYPE = 'PACKAGE'"
+        sql = "SELECT DISTINCT(PROCEDURE_NAME) FROM DBA_PROCEDURES WHERE OBJECT_TYPE = 'PACKAGE' ORDER BY PROCEDURE_NAME ASC"
         cursor.execute(sql)
-        storedpackage_names = [row[0] for row in cursor.fetchall()]
+        storedpackage_names = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
 
         cursor.close()
 
@@ -446,7 +452,7 @@ def add_step(test_id):
                 p_err_code varchar2(4000); 
                 p_output clob; 
             begin 
-                lm.{_type}.execute(1, '{module}', '{name}', p_result, p_err_code, p_output, false); 
+                lm.{_type}.execute(1, '{module}', q'({name})', p_result, p_err_code, p_output, false); 
                 dbms_output.put_line(p_result || ' - ' || p_err_code); 
                 dbms_output.put_line(p_output); 
             end; 
@@ -522,9 +528,9 @@ def get_tables_for_schema():
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
-        sql = "SELECT table_name FROM all_tables WHERE owner = :schema"
+        sql = "SELECT table_name FROM all_tables WHERE owner = :schema order by table_name asc"
         cursor.execute(sql, {'schema': selected_schema})
-        table_names = [row[0] for row in cursor.fetchall()]
+        table_names = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
         cursor.close()
         pool.release(connection)
         return json.dumps(table_names)
@@ -539,9 +545,9 @@ def get_tables_for_prod_schema():
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
-        sql = "SELECT table_name FROM all_tables@ods_prod WHERE owner = :schema"
+        sql = "SELECT table_name FROM all_tables@ods_prod WHERE owner = :schema order by table_name asc"
         cursor.execute(sql, {'schema': selected_schema})
-        table_names = [row[0] for row in cursor.fetchall()]
+        table_names = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
         cursor.close()
         pool.release(connection)
         return json.dumps(table_names)
@@ -556,9 +562,9 @@ def get_procedures_for_schema():
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
-        sql = "SELECT OBJECT_NAME FROM DBA_PROCEDURES WHERE OBJECT_TYPE IN ('FUNCTION', 'PROCEDURE') AND OWNER = :schema"
+        sql = "SELECT DISTINCT(OBJECT_NAME) FROM DBA_PROCEDURES WHERE OBJECT_TYPE IN ('FUNCTION', 'PROCEDURE') AND OWNER = :schema order by object_name asc"
         cursor.execute(sql, {'schema': selected_schema})
-        procedure_names = [row[0] for row in cursor.fetchall()]
+        procedure_names = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
         cursor.close()
         pool.release(connection)
         return json.dumps(procedure_names)
@@ -610,9 +616,9 @@ def get_packages_for_schema():
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
-        sql = "SELECT OBJECT_NAME FROM DBA_PROCEDURES WHERE OBJECT_TYPE = 'PACKAGE' AND OWNER = :schema"
+        sql = "SELECT OBJECT_NAME FROM DBA_OBJECTS WHERE OBJECT_TYPE = 'PACKAGE BODY' AND OWNER = :schema order by object_name asc"
         cursor.execute(sql, {'schema': selected_schema})
-        package_names = [row[0] for row in cursor.fetchall()]
+        package_names = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
         cursor.close()
         pool.release(connection)
         return json.dumps(package_names)
@@ -628,9 +634,9 @@ def get_procedures_for_package():
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
-        sql = "SELECT PROCEDURE_NAME FROM DBA_PROCEDURES WHERE OBJECT_TYPE = 'PACKAGE' AND OWNER = :schema AND OBJECT_NAME = :package"
+        sql = "SELECT PROCEDURE_NAME FROM DBA_PROCEDURES WHERE OBJECT_TYPE = 'PACKAGE' AND PROCEDURE_NAME IS NOT NULL AND OWNER = :schema AND OBJECT_NAME = :package order by procedure_name asc"
         cursor.execute(sql, {'schema': selected_schema, 'package': selected_package})
-        procedure_names = [row[0] for row in cursor.fetchall()]
+        procedure_names = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
         cursor.close()
         pool.release(connection)
         return json.dumps(procedure_names)
@@ -646,7 +652,7 @@ def get_workdays():
         cursor = connection.cursor()
         sql = "SELECT T_DATE FROM STA.TR_DATE WHERE WORK_DAY = 'Y' AND T_DATE BETWEEN ADD_MONTHS(TRUNC(SYSDATE, 'YEAR'), -12) AND LAST_DAY(SYSDATE) ORDER BY T_DATE DESC"
         cursor.execute(sql)
-        workdays = [row[0].strftime("%Y-%m-%d") for row in cursor.fetchall()]
+        workdays = ['-- Select an option --'] + [row[0].strftime("%Y-%m-%d") for row in cursor.fetchall()]
         cursor.close()
         pool.release(connection)
         return json.dumps(workdays)
@@ -661,9 +667,9 @@ def get_names_for_module():
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
-        sql = "SELECT NAME FROM LM.INV_JOBS WHERE MODULE = :module"
+        sql = "SELECT DISTINCT(NAME) FROM LM.INV_JOBS WHERE MODULE = :module order by name asc"
         cursor.execute(sql, {'module': selected_module})
-        names = [row[0] for row in cursor.fetchall()]
+        names = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
         cursor.close()
         pool.release(connection)
         return json.dumps(names)
@@ -678,9 +684,9 @@ def get_types_for_module():
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
-        sql = "SELECT TYPE FROM LM.INV_MODULE WHERE MODULE = :module"
+        sql = "SELECT DISTINCT(TYPE) FROM LM.INV_MODULE WHERE MODULE = :module order by type asc"
         cursor.execute(sql, {'module': selected_module})
-        types = [row[0] for row in cursor.fetchall()]
+        types = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
         cursor.close()
         pool.release(connection)
         return json.dumps(types)
