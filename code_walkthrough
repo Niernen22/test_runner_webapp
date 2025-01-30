@@ -1,6 +1,79 @@
-Let's see what happens in the code and where, when the user wants to add a step to their test (in this example a function or procedure).
-ADDING A STEP - STORED PROCEDURES / FUNCTION OR PROCEDURE
+Let's see what happens in the code and where, when the user is on the index page and wants to create a new step, then add a function or procedure step_type with parameters to it.
 
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+----this is the 'Add Test' button that opens the TestModal
+    <button type="button" onclick="openTestPopup()">Add Test</button>
+	
+----this is the testForm in the index.html modal where the user types in the new test's basic info:
+    <div id="TestModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Add Test</h2>
+            <form id="testForm" onsubmit="event.preventDefault()" action="{{ url_for('add_test') }}" method="POST">
+    
+                <label for="new_test_name">Test Name:</label><br>
+                <input type="text" id="new_test_name" name="new_test_name"><br>
+				
+----this is the button in the index.html that submits the data:
+                <input type="button" value="Submit" onclick="submitFormData()">
+				
+----the javascript for the index.html is in the add_test.js file:
+    <script src="{{ url_for('static', filename='js/add_test.js') }}"></script>
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+----this is the submitFormData in the add_test.js that posts the data then gives feedback to the user: 
+function submitFormData() {
+    var form = document.getElementById("testForm");
+    var formData = new FormData(form);
+
+    fetch(form.action, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        if (response.redirected) {
+            window.location.href = response.url;
+        } else {
+            return response.text();
+        }
+    })
+    .then(result => {
+        console.log('Success:', result);
+        document.getElementById("TestModal").style.display = "none";
+    })
+    .catch(error => {
+        console.error('Error:', error);
+    });
+}
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+----this is the /add_test in the main.py that runs the query which adds the new test and redirects to it's edit_step url:
+@app.route('/add_test', methods=['POST'])
+@login_required
+def add_test():
+    try:
+        connection = pool.acquire()
+        cursor = connection.cursor()
+
+        test_name = request.form['new_test_name']
+
+        query = "INSERT INTO TESTS (ID, NAME) VALUES (TESTS_SEQ.NEXTVAL, :name)"
+        cursor.execute(query, {'name': test_name})
+
+        connection.commit()
+
+        cursor.execute("SELECT TESTS_SEQ.CURRVAL FROM dual")
+        new_id = cursor.fetchone()[0]
+
+        cursor.close()
+        connection.close()
+
+        return redirect(url_for('edit_steps', test_id=new_id))
+
+    except oracledb.Error as error:
+        return f"Error inserting new test: {error}"
+		
+------------------------------------------------------------------------------------------------------------------------------------------------------------
 ----this is the 'Add Step' button in the edit_steps.html:
     <button type="button" onclick="openPopup()">Add Step</button>
 	
@@ -25,7 +98,7 @@ function openPopup() {
 }
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------------
-----this is the stepForm in the edit_steps.html where you can choose the chosen step_type:
+----this is the stepForm in the edit_steps.html modal where you can choose the chosen step_type:
     <div id="myModal" class="modal">
         <div class="modal-content">
             <span class="close">&times;</span>
@@ -192,7 +265,7 @@ function submitFormData() {
             });
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------------	
-----this is the submitFormDataToServer in the edit_steps.js that posts the finished formData then shows the feedback to the user:
+----this is the submitFormDataToServer in the edit_steps.js that posts the finished formData then gives feedback to the user:
 function submitFormDataToServer(formData) {
     fetch('/add_step/' + test_id, {
         method: 'POST',
