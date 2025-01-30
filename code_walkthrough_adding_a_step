@@ -1,0 +1,304 @@
+Let's see what happens in the code and where, when the user wants to add a step to their test (in this example a function or procedure).
+ADDING A STEP - STORED PROCEDURES / FUNCTION OR PROCEDURE
+
+----this is the 'Add Step' button in the edit_steps.html:
+    <button type="button" onclick="openPopup()">Add Step</button>
+	
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+----this is the openPopup in the edit_steps.js that opens the Modal where the forms will appear:
+function openPopup() {
+    var modal = document.getElementById("myModal");
+
+    modal.style.display = "block";
+
+    var span = document.getElementsByClassName("close")[0];
+
+    span.onclick = function() {
+        modal.style.display = "none";
+    }
+
+    window.onclick = function(event) {
+        if (event.target == modal) {
+            modal.style.display = "none";
+        }
+    }
+}
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+----this is the stepForm in the edit_steps.html where you can choose the chosen step_type:
+    <div id="myModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Add Step</h2>
+            <form id="stepForm" onsubmit="event.preventDefault()">
+
+                <label for="new_step_name">Step Name:</label><br>
+                <input type="text" id="new_step_name" name="new_step_name"><br>
+
+
+                <label for="step_type">Select Step Type:</label><br>
+                <select id="step_type" name="step_type" onchange="showParametersForm()">
+                    <option value="none">-- Select an option --</option>
+                    <!--<option value="TRUNCATE_TABLE">Truncate Table</option> -->
+                    <option value="TABLECOPY">Table Copy</option>
+                    <option value="LM_JOB">LM Job</option>
+                    <option value="STORED_PROCEDURE">Stored Procedure</option>
+                </select><br><br>
+				
+----this is the StoredProcedureForm in the edit_steps.html where you can choose the storedprocedure_type inside the STORED_PROCEDURE step_type:
+                <div id="StoredProcedureForm" style="display: none;">
+                    <h3>Enter Parameters for Stored Procedure</h3>
+
+                    <label for="storedprocedure_type">Select Stored Procedure Type:</label><br>
+                    <select id="storedprocedure_type" name="storedprocedure_type" onchange="showSPParametersForm()">
+                        <option value="none">-- Select an option --</option>
+                        <option value="Function_or_Procedure">Function or Procedure</option>
+                        <option value="Package">Package</option>
+                    </select><br><br>
+
+----this is the FunctionOrProcedureForm in the edit_steps.html where all the relevant parameters get asked for:
+                    <div id="FunctionOrProcedureForm" style="display: none;">
+
+                        <label for="procedures_schema">Schema:</label><br>
+                        <select id="procedures_schema" name="procedures_schema" onchange="getProceduresForSchema(this.value)">
+                            {% for procedures_schema in procedures_schemas %}
+                            <option value="{{ procedures_schema }}">{{ procedures_schema }}</option>
+                            {% endfor %}
+                        </select><br><br>
+
+                        <label for="storedobject_name">Stored Function or Procedure Name:</label><br>
+                        <select id="storedobject_name" name="storedobject_name" onchange="getParametersForStoredProcedure(this.value, document.getElementById('procedures_schema').value)">
+                            {% for storedobject_name in storedobject_names %}
+                            <option value="{{ storedobject_name }}">{{ storedobject_name }}</option>
+                            {% endfor %}
+                        </select><br><br>
+
+
+                        <p>Parameters:</p>
+                        <div id="parameters"></div><br><br>
+                    </div>
+					
+----the javascript for this html is in the edit_steps.js file:
+    <script src="{{ url_for('static', filename='js/edit_steps.js') }}"></script>
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+----this is the getParametersForStoredProcedure in the edit_steps.js that show the parameters for the selected schema and procedure:
+function getParametersForStoredProcedure(selectedStoredObjectName, selectedSchema) {
+    fetch('/get_parameters_for_stored_procedure', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ storedobject_name: selectedStoredObjectName, schema: selectedSchema })
+    })
+    .then(response => response.json())
+    .then(data => {
+        var parametersDiv = document.getElementById('parameters');
+        parametersDiv.innerHTML = '';
+        data.forEach(function(parameter) {
+            var parameterLabel = document.createElement('label');
+            parameterLabel.textContent = parameter.argument_name + ':';
+            parametersDiv.appendChild(parameterLabel);
+        
+            var parameterInput = document.createElement('input');
+            parameterInput.type = 'text';
+            parameterInput.value = parameter.default_value;
+            parameterInput.setAttribute('name', parameter.argument_name);
+            parametersDiv.appendChild(parameterInput);
+        });
+    })
+    .catch(error => console.error('Error:', error));
+}
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+----this is the /get_parameters_for_stored_procedure in the main.py where the query for all the parameters are:
+@app.route('/get_parameters_for_stored_procedure', methods=['POST'])
+@login_required
+def get_parameters_for_stored_procedure():
+    selectedSchema = request.json['schema']
+    selectedStoredObjectName = request.json['storedobject_name']
+    try:
+        connection = pool.acquire()
+        cursor = connection.cursor()
+        sql = "SELECT argument_name, data_type, defaulted, default_value FROM dba_arguments WHERE IN_OUT = 'IN' AND PACKAGE_NAME IS NULL AND object_name = :storedobject_name AND owner = :schema"
+        cursor.execute(sql, {'storedobject_name': selectedStoredObjectName, 'schema': selectedSchema})
+        parameter_details = [{'argument_name': row[0], 'data_type': row[1].upper(), 'defaulted': row[2], 'default_value': row[3]} for row in cursor.fetchall()]
+        cursor.close()
+        pool.release(connection)
+        return json.dumps(parameter_details)
+    except Exception as e:
+        return json.dumps({'error': str(e)})
+		
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+----this is the 'Submit' button in the edit_steps.htm, the user will click on it after they filled everything on the forms:
+<input type="button" value="Submit" onclick="submitFormData()">
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+----this is the beginning of the submitFormData in the edit_steps.js starts filling the formData:
+function submitFormData() {
+    let formData = {
+        new_step_name: document.getElementById('new_step_name').value.trim(),
+        step_type: document.getElementById('step_type').value.trim(),
+        source_schema: null,
+        source_table: null,
+        target_schema: null,
+        target_table: null,
+        truncate: null,
+        date: null,
+        module: null,
+        type: null,
+        name: null,
+        storedprocedure_type: null,
+        procedures_schema: null,
+        storedobject_name: null,
+        procedures_schema_package: null,
+        storedpackage_name: null,
+        storedobject_name_package: null,
+        parameters: {}
+    };
+	
+----this is how it continues for the STORED_PROCEDURE option:
+    } else if (formData.step_type === 'STORED_PROCEDURE') {
+        formData.storedprocedure_type = document.getElementById('storedprocedure_type').value.trim();
+
+        if (formData.storedprocedure_type === 'Function_or_Procedure') {
+            formData.procedures_schema = document.getElementById('procedures_schema').value.trim();
+            formData.storedobject_name = document.getElementById('storedobject_name').value.trim();
+
+            fetch('/get_parameters_for_stored_procedure', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    schema: formData.procedures_schema,
+                    storedobject_name: formData.storedobject_name
+                })
+            })
+            .then(response => response.json())
+            .then(parameterDetails => {
+                formData.parameter_details = parameterDetails;
+
+                formData.parameters = Array.from(document.getElementById('parameters').getElementsByTagName('input')).reduce((acc, input) => {
+                    acc[input.name] = input.value.trim();
+                    return acc;
+                }, {});
+
+                submitFormDataToServer(formData);
+            })
+            .catch(error => {
+                console.error('Error fetching parameter details:', error);
+                alert("There was an error fetching the parameter details.");
+            });
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------	
+----this is the submitFormDataToServer in the edit_steps.js that posts the finished formData then shows the feedback to the user:
+function submitFormDataToServer(formData) {
+    fetch('/add_step/' + test_id, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert("Step successfully added!");
+            window.location.href = data.redirect_url;
+        } else {
+            alert("Error: " + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error during AJAX submission:', error);
+        alert("There was an error submitting the form. Please try again.");
+    });
+}
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+----this is the beginning of the /add_step/<test_id> in the main.py that forms feedback and starts filling the values for the sql code:
+@app.route('/add_step/<test_id>', methods=['POST'])
+@login_required
+def add_step(test_id):
+    
+    try:
+        if request.is_json:
+            data = request.get_json()
+        else:
+            return jsonify({'success': False, 'error': 'Invalid input format'})
+
+        new_step_name = data.get('new_step_name')
+        step_type = data.get('step_type')
+        sql_code = ''
+       
+        def default_if_none(value, default=''):
+            return value if value is not None else default
+----this is how it continues for STORED_PROCEDUREs:
+        elif step_type == 'STORED_PROCEDURE':
+        
+            def format_parameter(value, data_type):
+                if value is None:
+                    return "NULL"
+
+                data_type = data_type.upper()
+
+                if data_type in ("VARCHAR2", "CHAR", "CLOB", "LONG"):
+                    escaped_value = value.replace("'", "''")
+                    return f"'{escaped_value}'"
+
+                elif data_type in ("NUMBER", "INTEGER", "FLOAT", "BINARY_DOUBLE", "BINARY_FLOAT", "BINARY_INTEGER", "PL/SQL BOOLEAN"):
+                    return str(value)
+
+                elif data_type == "DATE":
+                    return f"TO_DATE('{value}', 'YYYY-MM-DD')"
+
+                elif data_type in ("TIMESTAMP"):
+                    return f"TO_TIMESTAMP('{value}', 'YYYY-MM-DD HH24:MI:SS')"
+
+                else:
+                    raise ValueError(f"Unsupported data type: {data_type}")
+
+            storedprocedure_type = default_if_none(data.get('storedprocedure_type'))
+            parameter_details = data.get('parameter_details', [])
+            parameters_data = data.get('parameters', {})
+
+            if 'parameter_details' not in data or 'parameters' not in data:
+                raise ValueError("Missing parameter details or parameters in the input data.")
+            
+            parameters = ', '.join([
+                format_parameter(value, param['data_type'])
+                for param, value in zip(parameter_details, parameters_data.values())
+                if value is not None or not param.get('defaulted', False)
+            ])
+----this is how it continues for Function_or_Procedures in STORED_PROCEDUREs and how the sql code gets laced together:
+            if storedprocedure_type == 'Function_or_Procedure':
+                target_user = default_if_none(data.get('procedures_schema'))
+                procedures_schema = default_if_none(data.get('procedures_schema'))
+                storedobject_name = default_if_none(data.get('storedobject_name'))
+                sql_code = f"BEGIN {procedures_schema}.{storedobject_name}({parameters}); END;"
+----then this is how it finishes = the step gets added = the sql code runs:
+        connection = pool.acquire()
+        cursor = connection.cursor()
+
+        new_order_query = "SELECT MAX(ORDERNUMBER) FROM TEST_STEPS WHERE TEST_ID = :test_id"
+        cursor.execute(new_order_query, {'test_id': test_id})
+        result = cursor.fetchone()
+        new_order_number = (result[0] if result[0] is not None else 0) + 1
+
+        cursor.execute("SELECT TEST_STEPS_SEQ.NEXTVAL FROM dual")
+        new_id = cursor.fetchone()[0] 
+
+        sql = "INSERT INTO TEST_STEPS (ID, TEST_ID, NAME, ORDERNUMBER, STATUS, TYPE, SQL_CODE, TARGET_USER) VALUES (:1, :2, :3, :4, :5, :6, :7, :8)"
+        data = (new_id, test_id, new_step_name, new_order_number, 'ADDED', step_type, sql_code, target_user)
+
+        cursor.execute(sql, data)
+        connection.commit()
+
+        cursor.close()
+        connection.close()
+
+        return jsonify({'success': True, 'redirect_url': url_for('edit_steps', test_id=test_id)})
+
+    except oracledb.Error as error:
+        return jsonify({'success': False, 'error': str(error)})
