@@ -459,21 +459,55 @@ def add_step(test_id):
             """
 
         elif step_type == 'STORED_PROCEDURE':
+        
+            def format_parameter(value, data_type):
+                if value is None:
+                    return "NULL"
+
+                data_type = data_type.upper()
+
+                if data_type in ("VARCHAR2", "CHAR", "CLOB", "LONG"):
+                    escaped_value = value.replace("'", "''")
+                    return f"'{escaped_value}'"
+
+                elif data_type in ("NUMBER", "INTEGER", "FLOAT", "BINARY_DOUBLE", "BINARY_FLOAT", "BINARY_INTEGER", "PL/SQL BOOLEAN"):
+                    return str(value)
+
+                elif data_type == "DATE":
+                    return f"TO_DATE('{value}', 'YYYY-MM-DD')"
+
+                elif data_type in ("TIMESTAMP"):
+                    return f"TO_TIMESTAMP('{value}', 'YYYY-MM-DD HH24:MI:SS')"
+
+                else:
+                    raise ValueError(f"Unsupported data type: {data_type}")
+
             storedprocedure_type = default_if_none(data.get('storedprocedure_type'))
-            parameters = ', '.join([f"'{default_if_none(value)}'" for value in data.get('parameters', {}).values()])
+            parameter_details = data.get('parameter_details', [])
+            parameters_data = data.get('parameters', {})
+
+            if 'parameter_details' not in data or 'parameters' not in data:
+                raise ValueError("Missing parameter details or parameters in the input data.")
+            
+            parameters = ', '.join([
+                format_parameter(value, param['data_type'])
+                for param, value in zip(parameter_details, parameters_data.values())
+                if value is not None or not param.get('defaulted', False)
+            ])
+            
             if storedprocedure_type == 'Function_or_Procedure':
                 target_user = default_if_none(data.get('procedures_schema'))
                 procedures_schema = default_if_none(data.get('procedures_schema'))
                 storedobject_name = default_if_none(data.get('storedobject_name'))
                 sql_code = f"BEGIN {procedures_schema}.{storedobject_name}({parameters}); END;"
-        
+            
             elif storedprocedure_type == 'Package':
                 target_user = default_if_none(data.get('procedures_schema_package'))
                 procedures_schema_package = default_if_none(data.get('procedures_schema_package'))
                 storedpackage_name = default_if_none(data.get('storedpackage_name'))
                 storedobject_name_package = default_if_none(data.get('storedobject_name_package'))
                 sql_code = f"BEGIN {procedures_schema_package}.{storedpackage_name}.{storedobject_name_package}({parameters}); END;"
-
+                        
         connection = pool.acquire()
         cursor = connection.cursor()
 
@@ -582,7 +616,7 @@ def get_parameters_for_stored_procedure():
         cursor = connection.cursor()
         sql = "SELECT argument_name, data_type, defaulted, default_value FROM dba_arguments WHERE IN_OUT = 'IN' AND PACKAGE_NAME IS NULL AND object_name = :storedobject_name AND owner = :schema"
         cursor.execute(sql, {'storedobject_name': selectedStoredObjectName, 'schema': selectedSchema})
-        parameter_details = [{'argument_name': row[0], 'data_type': row[1], 'defaulted': row[2], 'default_value': row[3]} for row in cursor.fetchall()]
+        parameter_details = [{'argument_name': row[0], 'data_type': row[1].upper(), 'defaulted': row[2], 'default_value': row[3]} for row in cursor.fetchall()]
         cursor.close()
         pool.release(connection)
         return json.dumps(parameter_details)
@@ -601,7 +635,7 @@ def get_parameters_for_stored_procedure_in_package():
         cursor = connection.cursor()
         sql = "SELECT argument_name, data_type, defaulted, default_value FROM dba_arguments WHERE IN_OUT = 'IN' AND object_name = :storedobject_name AND package_name = :package_name AND owner = :schema"
         cursor.execute(sql, {'storedobject_name': selectedStoredObjectName, 'package_name': selectedPackage, 'schema': selectedSchema})
-        parameter_details = [{'argument_name': row[0], 'data_type': row[1], 'defaulted': row[2], 'default_value': row[3]} for row in cursor.fetchall()]
+        parameter_details = [{'argument_name': row[0], 'data_type': row[1].upper(), 'defaulted': row[2], 'default_value': row[3]} for row in cursor.fetchall()]
         cursor.close()
         pool.release(connection)
         return json.dumps(parameter_details)
@@ -686,7 +720,7 @@ def get_types_for_module():
         cursor = connection.cursor()
         sql = "SELECT DISTINCT(TYPE) FROM LM.INV_MODULE WHERE MODULE = :module order by type asc"
         cursor.execute(sql, {'module': selected_module})
-        types = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
+        types = [row[0] for row in cursor.fetchall()]
         cursor.close()
         pool.release(connection)
         return json.dumps(types)
