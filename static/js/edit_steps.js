@@ -4,27 +4,27 @@ function showParametersForm() {
         document.getElementById('TablecopyForm').style.display = 'block';
         document.getElementById('LMparametersForm').style.display = 'none';
         document.getElementById('StoredProcedureForm').style.display = 'none';
-        document.getElementById('TruncateForm').style.display = 'none';
+        //document.getElementById('TruncateForm').style.display = 'none';
     } else if (selectedType === 'LM_JOB') {
         document.getElementById('TablecopyForm').style.display = 'none';
         document.getElementById('LMparametersForm').style.display = 'block';
         document.getElementById('StoredProcedureForm').style.display = 'none';
-        document.getElementById('TruncateForm').style.display = 'none';
-    } else if (selectedType === 'TRUNCATE_TABLE') {
-        document.getElementById('TablecopyForm').style.display = 'none';
-        document.getElementById('LMparametersForm').style.display = 'none';
-        document.getElementById('StoredProcedureForm').style.display = 'none';
-        document.getElementById('TruncateForm').style.display = 'block';
+        //document.getElementById('TruncateForm').style.display = 'none';
+    //} else if (selectedType === 'TRUNCATE_TABLE') {
+        //document.getElementById('TablecopyForm').style.display = 'none';
+        //document.getElementById('LMparametersForm').style.display = 'none';
+        //document.getElementById('StoredProcedureForm').style.display = 'none';
+        //document.getElementById('TruncateForm').style.display = 'block';
     } else if (selectedType === 'STORED_PROCEDURE') {
         document.getElementById('TablecopyForm').style.display = 'none'; 
         document.getElementById('LMparametersForm').style.display = 'none';
         document.getElementById('StoredProcedureForm').style.display = 'block';
-        document.getElementById('TruncateForm').style.display = 'none';
+        //document.getElementById('TruncateForm').style.display = 'none';
     } else {
         document.getElementById('TablecopyForm').style.display = 'none';
         document.getElementById('LMparametersForm').style.display = 'none';
         document.getElementById('StoredProcedureForm').style.display = 'none';
-        document.getElementById('TruncateForm').style.display = 'none';
+        //document.getElementById('TruncateForm').style.display = 'none';
     }
 }
 
@@ -368,8 +368,8 @@ function openPopup() {
 
 function submitFormData() {
     let formData = {
-        new_step_name: document.getElementById('new_step_name').value,
-        step_type: document.getElementById('step_type').value,
+        new_step_name: document.getElementById('new_step_name').value.trim(),
+        step_type: document.getElementById('step_type').value.trim(),
         source_schema: null,
         source_table: null,
         target_schema: null,
@@ -387,7 +387,7 @@ function submitFormData() {
         storedobject_name_package: null,
         parameters: {}
     };
-    
+
     if (formData.step_type === 'TABLECOPY') {
         formData.source_schema = document.getElementById('source_schema').value.trim();
         formData.source_table = document.getElementById('source_table').value.trim();
@@ -395,34 +395,92 @@ function submitFormData() {
         formData.target_table = document.getElementById('target_table').value.trim();
         formData.truncate = document.getElementById('truncate').value.trim();
         formData.date = document.getElementById('date').value.trim();
+        submitFormDataToServer(formData);
+
     } else if (formData.step_type === 'TRUNCATE_TABLE') {
-            formData.truncate_schema = document.getElementById('truncate_schema').value.trim();
-            formData.truncate_table = document.getElementById('truncate_table').value.trim();
-            formData.truncate_date = document.getElementById('truncate_date').value.trim();
+        formData.truncate_schema = document.getElementById('truncate_schema').value.trim();
+        formData.truncate_table = document.getElementById('truncate_table').value.trim();
+        formData.truncate_date = document.getElementById('truncate_date').value.trim();
+        submitFormDataToServer(formData);
+
     } else if (formData.step_type === 'LM_JOB') {
         formData.module = document.getElementById('module').value.trim();
         formData.type = document.getElementById('type').textContent.trim();
         formData.name = document.getElementById('name').value.trim();
+        submitFormDataToServer(formData);
+
     } else if (formData.step_type === 'STORED_PROCEDURE') {
         formData.storedprocedure_type = document.getElementById('storedprocedure_type').value.trim();
+
         if (formData.storedprocedure_type === 'Function_or_Procedure') {
             formData.procedures_schema = document.getElementById('procedures_schema').value.trim();
             formData.storedobject_name = document.getElementById('storedobject_name').value.trim();
-            formData.parameters = Array.from(document.getElementById('parameters').getElementsByTagName('input')).reduce((acc, input) => {
-                acc[input.name] = input.value.trim();
-                return acc;
-            }, {});
+
+            fetch('/get_parameters_for_stored_procedure', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    schema: formData.procedures_schema,
+                    storedobject_name: formData.storedobject_name
+                })
+            })
+            .then(response => response.json())
+            .then(parameterDetails => {
+                formData.parameter_details = parameterDetails;
+
+                formData.parameters = Array.from(document.getElementById('parameters').getElementsByTagName('input')).reduce((acc, input) => {
+                    acc[input.name] = input.value.trim();
+                    return acc;
+                }, {});
+
+                submitFormDataToServer(formData);
+            })
+            .catch(error => {
+                console.error('Error fetching parameter details:', error);
+                alert("There was an error fetching the parameter details.");
+            });
+
         } else if (formData.storedprocedure_type === 'Package') {
             formData.procedures_schema_package = document.getElementById('procedures_schema_package').value.trim();
             formData.storedpackage_name = document.getElementById('storedpackage_name').value.trim();
             formData.storedobject_name_package = document.getElementById('storedobject_name_package').value.trim();
-            formData.parameters = Array.from(document.getElementById('parameters_package').getElementsByTagName('input')).reduce((acc, input) => {
-                acc[input.name] = input.value.trim();
-                return acc;
-            }, {});
-        }
-    }
 
+            fetch('/get_parameters_for_stored_procedure_in_package', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    schema: formData.procedures_schema_package,
+                    storedobject_name: formData.storedobject_name_package,
+                    package_name: formData.storedpackage_name
+                })
+            })
+            .then(response => response.json())
+            .then(parameterDetails => {
+                formData.parameter_details = parameterDetails;
+
+                formData.parameters = Array.from(document.getElementById('parameters_package').getElementsByTagName('input')).reduce((acc, input) => {
+                    acc[input.name] = input.value.trim();
+                    return acc;
+                }, {});
+
+                submitFormDataToServer(formData);
+            })
+            .catch(error => {
+                console.error('Error fetching parameter details for package:', error);
+                alert("There was an error fetching the parameter details for the package.");
+            });
+        }
+    } else {
+        alert("Invalid step type selected.");
+    }
+}
+
+
+function submitFormDataToServer(formData) {
     fetch('/add_step/' + test_id, {
         method: 'POST',
         headers: {
@@ -444,6 +502,7 @@ function submitFormData() {
         alert("There was an error submitting the form. Please try again.");
     });
 }
+
 
 
 function enableDragAndDrop() {
