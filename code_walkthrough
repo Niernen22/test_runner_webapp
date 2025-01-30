@@ -1,4 +1,4 @@
-Let's see what happens in the code and where, when the user is on the index page and wants to create a new step, then add a function or procedure step_type with parameters to it.
+Let's see what happens in the code and where, when the user is on the index page and wants to create a new test, then add a function or procedure type of step that requires parameters.
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------------
 ----this is the 'Add Test' button that opens the TestModal
