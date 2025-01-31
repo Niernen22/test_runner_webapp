@@ -1,4 +1,4 @@
-Let's see what happens in the code and where, from when the user logs in, to creating a new test, then adding a function or procedure type of step that requires parameters.
+Let's see what happens in the code and where, from when the user logs in, to creating a new test on the index page, then adding a function or procedure type of step that requires parameters.
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------------
 ----this is the login.html where the user has to write in their credentials (for every @app.route there is a @login_required, so they can't see any page without logging on):
