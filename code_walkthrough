@@ -1,4 +1,64 @@
-Let's see what happens in the code and where, when the user is on the index page and wants to create a new test, then add a function or procedure type of step that requires parameters.
+Let's see what happens in the code and where, from when the user logs in, to creating a new test, then adding a function or procedure type of step that requires parameters.
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+----this is the login.html where the user has to write in their credentials (for every @app.route there is a @login_required, so they can't see any page without logging on):
+    <form method="post">
+        <input type="text" name="username" placeholder="Username" required>
+        <input type="password" name="password" placeholder="Password" required>
+        <button type="submit">Login</button>
+    </form>
+	
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+----fist let's see what get's defined in the beginning of the main.py:
+----this creates an instance of LoginManager, which manages user authentication:
+login_manager = LoginManager()
+----this allows Flask-Login to integrate with the application, so it can manage user sessions
+login_manager.init_app(app)
+----this specifies the route name where Flask should redirect users who are not logged in (ff a user tries to access a @login_required route but is not authenticated)
+login_manager.login_view = 'login'
+----this is the definition of the User class where the logged on user's credentials will be stored:
+class User(UserMixin):
+    def __init__(self, id, username, password, is_admin):
+        self.id = id
+        self.username = username
+        self.password = password
+        self.is_admin = is_admin
+
+----this is the /login in the main.py that searches the user's credentials in the users table. If it's successful, the credentials get stored in the user object and they get redirected to the index.html, if it's not, they get sent back to the login page end get an error message.
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        connection = pool.acquire()
+        cursor = connection.cursor()
+        query = "SELECT id, username, password, is_admin FROM users WHERE username = :username"
+        cursor.execute(query, {'username': username})
+        row = cursor.fetchone()
+        cursor.close()
+        pool.release(connection)
+        if row and check_password_hash(row[2], password):
+            user = User(row[0], row[1], row[2], bool(row[3]))
+            login_user(user)
+            return redirect(url_for('index'))
+        return 'Invalid credentials'
+    return render_template('login.html')
+
+----when the user refreshes or navigates to an other page, then Flask-login retrieves the user from the database using user_id that is stored in the session
+@login_manager.user_loader
+def load_user(user_id):
+    connection = pool.acquire()
+    cursor = connection.cursor()
+    query = "SELECT id, username, password, is_admin FROM users WHERE id = :id"
+    cursor.execute(query, {'id': user_id})
+    row = cursor.fetchone()
+    if row:
+        user = User(row[0], row[1], row[2], bool(row[3]))
+    else:
+        user = None
+    cursor.close()
+    pool.release(connection)
+    return user
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------------
 ----this is the 'Add Test' button that opens the TestModal
@@ -98,7 +158,7 @@ function openPopup() {
 }
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------------
-----this is the stepForm in the edit_steps.html modal where you can choose the chosen step_type:
+----this is the stepForm in the edit_steps.html modal where the user can choose the chosen step_type:
     <div id="myModal" class="modal">
         <div class="modal-content">
             <span class="close">&times;</span>
@@ -118,7 +178,7 @@ function openPopup() {
                     <option value="STORED_PROCEDURE">Stored Procedure</option>
                 </select><br><br>
 				
-----this is the StoredProcedureForm in the edit_steps.html where you can choose the storedprocedure_type inside the STORED_PROCEDURE step_type:
+----this is the StoredProcedureForm in the edit_steps.html where the user can choose the storedprocedure_type inside the STORED_PROCEDURE step_type:
                 <div id="StoredProcedureForm" style="display: none;">
                     <h3>Enter Parameters for Stored Procedure</h3>
 
