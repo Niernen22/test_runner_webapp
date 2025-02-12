@@ -310,7 +310,7 @@ def edit_steps(test_id):
         cursor.execute(sql)
         modules = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
 
-        sql = "SELECT DISTINCT(OBJECT_NAME) FROM DBA_PROCEDURES WHERE OBJECT_TYPE IN ('FUNCTION' , 'PROCEDURE') ORDER BY OBJECT_NAME ASC"
+        sql = "SELECT DISTINCT(OBJECT_NAME) FROM DBA_PROCEDURES WHERE OBJECT_TYPE = 'PROCEDURE' ORDER BY OBJECT_NAME ASC"
         cursor.execute(sql)
         storedobject_names = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
 
@@ -356,11 +356,9 @@ def update_order():
         connection.close()
 
 
-
 @app.route('/add_step/<test_id>', methods=['POST'])
 @login_required
 def add_step(test_id):
-    
     try:
         if request.is_json:
             data = request.get_json()
@@ -373,6 +371,28 @@ def add_step(test_id):
        
         def default_if_none(value, default=''):
             return value if value is not None else default
+
+        def format_parameter(value, data_type):
+            if value is None:
+                return "NULL"
+
+            data_type = data_type.upper()
+
+            if data_type in ("VARCHAR2", "CHAR", "CLOB", "LONG"):
+                escaped_value = value.replace("'", "''")
+                return f"'{escaped_value}'"
+
+            elif data_type in ("NUMBER", "INTEGER", "FLOAT", "BINARY_DOUBLE", "BINARY_FLOAT", "BINARY_INTEGER", "PL/SQL BOOLEAN"):
+                return str(value)
+
+            elif data_type == "DATE":
+                return f"TO_DATE('{value}', 'YYYY-MM-DD')"
+
+            elif data_type == "TIMESTAMP":
+                return f"TO_TIMESTAMP('{value}', 'YYYY-MM-DD HH24:MI:SS')"
+
+            else:
+                raise ValueError(f"Unsupported data type: {data_type}")
 
         if step_type == 'TABLECOPY':
             target_user = 'TEST_RUNNER_REPO'
@@ -410,7 +430,6 @@ def add_step(test_id):
                 END;
                 """
 
-        
         elif step_type == 'TRUNCATE_TABLE':
             target_user = 'TEST_RUNNER_REPO'
             truncate_schema = default_if_none(data.get('truncate_schema'))
@@ -438,8 +457,6 @@ def add_step(test_id):
                 END;
                 """
 
-
-        
         elif step_type == 'LM_JOB':
             target_user = 'LM'
             module = default_if_none(data.get('module'))
@@ -457,57 +474,68 @@ def add_step(test_id):
                 dbms_output.put_line(p_output); 
             end; 
             """
-
         elif step_type == 'STORED_PROCEDURE':
-        
-            def format_parameter(value, data_type):
-                if value is None:
-                    return "NULL"
+            storedprocedure_type = default_if_none(data.get('storedprocedure_type'))
+            parameters = data.get('parameters', [])
+            parameter_details = data.get('parameter_details', [])
 
-                data_type = data_type.upper()
+            sql_declare = [] 
+            sql_exec_params = []
+            sql_output = [] 
 
-                if data_type in ("VARCHAR2", "CHAR", "CLOB", "LONG"):
-                    escaped_value = value.replace("'", "''")
-                    return f"'{escaped_value}'"
+            for param in parameters:
+                param_name = param['name']
+                param_type = param['type']
+                param_value = default_if_none(param['value'])
 
-                elif data_type in ("NUMBER", "INTEGER", "FLOAT", "BINARY_DOUBLE", "BINARY_FLOAT", "BINARY_INTEGER", "PL/SQL BOOLEAN"):
-                    return str(value)
+                param_detail = next((p for p in parameter_details if p['argument_name'] == param_name), None)
+                if not param_detail:
+                    raise ValueError(f"Parameter detail not found for {param_name}")
 
-                elif data_type == "DATE":
-                    return f"TO_DATE('{value}', 'YYYY-MM-DD')"
+                data_type = param_detail['data_type']
 
-                elif data_type in ("TIMESTAMP"):
-                    return f"TO_TIMESTAMP('{value}', 'YYYY-MM-DD HH24:MI:SS')"
+                if param_type == 'OUT':
+                    sql_declare.append(f"{param_name} {data_type};")
+                    sql_exec_params.append(param_name)
+                    sql_output.append(f"DBMS_OUTPUT.PUT_LINE({param_name});")
+
+                elif param_type == 'IN/OUT':
+                    formatted_value = format_parameter(param_value, data_type)
+                    sql_declare.append(f"{param_name} {data_type} := {formatted_value};")
+                    sql_exec_params.append(param_name)
+                    sql_output.append(f"DBMS_OUTPUT.PUT_LINE({param_name});")
 
                 else:
-                    raise ValueError(f"Unsupported data type: {data_type}")
+                    formatted_value = format_parameter(param_value, data_type)
+                    sql_exec_params.append(formatted_value)
 
-            storedprocedure_type = default_if_none(data.get('storedprocedure_type'))
-            parameter_details = data.get('parameter_details', [])
-            parameters_data = data.get('parameters', {})
+            declare_section = ""
+            if sql_declare:
+                declare_section = f"DECLARE\n    {' '.join(sql_declare)}\n"
 
-            if 'parameter_details' not in data or 'parameters' not in data:
-                raise ValueError("Missing parameter details or parameters in the input data.")
-            
-            parameters = ', '.join([
-                format_parameter(value, param['data_type'])
-                for param, value in zip(parameter_details, parameters_data.values())
-                if value is not None or not param.get('defaulted', False)
-            ])
-            
-            if storedprocedure_type == 'Function_or_Procedure':
-                target_user = default_if_none(data.get('procedures_schema'))
+            if storedprocedure_type == 'SingleProcedure':
                 procedures_schema = default_if_none(data.get('procedures_schema'))
                 storedobject_name = default_if_none(data.get('storedobject_name'))
-                sql_code = f"BEGIN {procedures_schema}.{storedobject_name}({parameters}); END;"
-            
+                sql_code = f"""
+                {declare_section}BEGIN
+                    {procedures_schema}.{storedobject_name}({', '.join(sql_exec_params)});
+                    {' '.join(sql_output)}
+                END;
+                """
+
             elif storedprocedure_type == 'Package':
-                target_user = default_if_none(data.get('procedures_schema_package'))
                 procedures_schema_package = default_if_none(data.get('procedures_schema_package'))
                 storedpackage_name = default_if_none(data.get('storedpackage_name'))
                 storedobject_name_package = default_if_none(data.get('storedobject_name_package'))
-                sql_code = f"BEGIN {procedures_schema_package}.{storedpackage_name}.{storedobject_name_package}({parameters}); END;"
-                        
+                sql_code = f"""
+                {declare_section}BEGIN
+                    {procedures_schema_package}.{storedpackage_name}.{storedobject_name_package}({', '.join(sql_exec_params)});
+                    {' '.join(sql_output)}
+                END;
+                """
+
+            target_user = procedures_schema if storedprocedure_type == 'SingleProcedure' else procedures_schema_package
+
         connection = pool.acquire()
         cursor = connection.cursor()
 
@@ -532,7 +560,8 @@ def add_step(test_id):
 
     except oracledb.Error as error:
         return jsonify({'success': False, 'error': str(error)})
-
+    except Exception as error:
+        return jsonify({'success': False, 'error': str(error)})
 
 
 @app.route('/delete_step', methods=['POST'])
@@ -596,7 +625,7 @@ def get_procedures_for_schema():
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
-        sql = "SELECT DISTINCT(OBJECT_NAME) FROM DBA_PROCEDURES WHERE OBJECT_TYPE IN ('FUNCTION', 'PROCEDURE') AND OWNER = :schema order by object_name asc"
+        sql = "SELECT DISTINCT(OBJECT_NAME) FROM DBA_PROCEDURES WHERE OBJECT_TYPE = 'PROCEDURE' AND OWNER = :schema order by object_name asc"
         cursor.execute(sql, {'schema': selected_schema})
         procedure_names = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
         cursor.close()
@@ -614,9 +643,28 @@ def get_parameters_for_stored_procedure():
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
-        sql = "SELECT argument_name, data_type, defaulted, default_value FROM dba_arguments WHERE IN_OUT = 'IN' AND PACKAGE_NAME IS NULL AND object_name = :storedobject_name AND owner = :schema"
+
+        sql = """
+        SELECT argument_name, data_type, defaulted, default_value, IN_OUT 
+        FROM dba_arguments 
+        WHERE PACKAGE_NAME IS NULL 
+          AND object_name = :storedobject_name 
+          AND owner = :schema
+        """
+
         cursor.execute(sql, {'storedobject_name': selectedStoredObjectName, 'schema': selectedSchema})
-        parameter_details = [{'argument_name': row[0], 'data_type': row[1].upper(), 'defaulted': row[2], 'default_value': row[3]} for row in cursor.fetchall()]
+
+        parameter_details = [
+            {
+                'argument_name': row[0], 
+                'data_type': row[1], 
+                'defaulted': row[2], 
+                'default_value': row[3], 
+                'in_out': row[4]
+            } 
+            for row in cursor.fetchall()
+        ]
+
         cursor.close()
         pool.release(connection)
         return json.dumps(parameter_details)
@@ -633,14 +681,34 @@ def get_parameters_for_stored_procedure_in_package():
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
-        sql = "SELECT argument_name, data_type, defaulted, default_value FROM dba_arguments WHERE IN_OUT = 'IN' AND object_name = :storedobject_name AND package_name = :package_name AND owner = :schema"
+
+        sql = """
+        SELECT argument_name, data_type, defaulted, default_value, IN_OUT 
+        FROM dba_arguments 
+        WHERE object_name = :storedobject_name 
+          AND package_name = :package_name 
+          AND owner = :schema
+        """
+
         cursor.execute(sql, {'storedobject_name': selectedStoredObjectName, 'package_name': selectedPackage, 'schema': selectedSchema})
-        parameter_details = [{'argument_name': row[0], 'data_type': row[1].upper(), 'defaulted': row[2], 'default_value': row[3]} for row in cursor.fetchall()]
+
+        parameter_details = [
+            {
+                'argument_name': row[0], 
+                'data_type': row[1], 
+                'defaulted': row[2], 
+                'default_value': row[3], 
+                'in_out': row[4]
+            } 
+            for row in cursor.fetchall()
+        ]
+
         cursor.close()
         pool.release(connection)
         return json.dumps(parameter_details)
     except Exception as e:
         return json.dumps({'error': str(e)})
+
 
 
 @app.route('/get_packages_for_schema', methods=['POST'])
