@@ -31,14 +31,14 @@ function showParametersForm() {
 
 function showSPParametersForm() {
     let selectedType = document.getElementById('storedprocedure_type').value;
-    if (selectedType === 'Function_or_Procedure') {
-        document.getElementById('FunctionOrProcedureForm').style.display = 'block';
+    if (selectedType === 'SingleProcedure') {
+        document.getElementById('ProcedureForm').style.display = 'block';
         document.getElementById('PackageForm').style.display = 'none';
     } else if (selectedType === 'Package') {
-        document.getElementById('FunctionOrProcedureForm').style.display = 'none'; 
+        document.getElementById('ProcedureForm').style.display = 'none'; 
         document.getElementById('PackageForm').style.display = 'block';
     } else {
-        document.getElementById('FunctionOrProcedureForm').style.display = 'none';
+        document.getElementById('ProcedureForm').style.display = 'none';
         document.getElementById('PackageForm').style.display = 'none';
     }
 }
@@ -76,23 +76,74 @@ function getParametersForStoredProcedure(selectedStoredObjectName, selectedSchem
         body: JSON.stringify({ storedobject_name: selectedStoredObjectName, schema: selectedSchema })
     })
     .then(response => response.json())
-    .then(data => {
+    .then(parameterDetails => {
         var parametersDiv = document.getElementById('parameters');
-        parametersDiv.innerHTML = '';
-        data.forEach(function(parameter) {
-            var parameterLabel = document.createElement('label');
-            parameterLabel.textContent = parameter.argument_name + ':';
-            parametersDiv.appendChild(parameterLabel);
-        
-            var parameterInput = document.createElement('input');
-            parameterInput.type = 'text';
-            parameterInput.value = parameter.default_value;
-            parameterInput.setAttribute('name', parameter.argument_name);
-            parametersDiv.appendChild(parameterInput);
-        });
+        parametersDiv.innerHTML = ''; 
+
+        let hasDateParameter = parameterDetails.some(param => param.data_type === "DATE");
+
+        if (hasDateParameter) {
+            fetch('/get_workdays', { method: 'GET' })
+            .then(response => response.json())
+            .then(workdays => {
+                if (workdays.error) {
+                    console.error('Error fetching workdays:', workdays.error);
+                    return;
+                }
+
+                renderParameters(parameterDetails, new Set(workdays));
+            })
+            .catch(error => console.error('Error fetching workdays:', error));
+        } else {
+            renderParameters(parameterDetails, null);
+        }
     })
-    .catch(error => console.error('Error:', error));
+    .catch(error => console.error('Error fetching parameters:', error));
 }
+
+function renderParameters(parameterDetails, validDates) {
+    var parametersDiv = document.getElementById('parameters');
+    parameterDetails.forEach(function(parameter) {
+        var parameterLabel = document.createElement('label');
+        parameterLabel.textContent = parameter.argument_name + ' (' + parameter.in_out + '):';
+        parametersDiv.appendChild(parameterLabel);
+
+        if (parameter.in_out === 'IN' || parameter.in_out === 'IN/OUT') {
+            var parameterInput = document.createElement('input');
+            parameterInput.setAttribute('name', parameter.argument_name);
+
+            if (parameter.data_type === "DATE") {
+                parameterInput.type = 'text';
+                parameterInput.classList.add('date-picker');
+
+                setTimeout(() => {
+                    $(parameterInput).datepicker({
+                        dateFormat: 'yy-mm-dd',
+                        beforeShowDay: function(date) {
+                            let formattedDate = $.datepicker.formatDate('yy-mm-dd', date);
+                            return [validDates ? validDates.has(formattedDate) : true];
+                        }
+                    });
+                }, 0);
+            } else {
+                parameterInput.type = 'text';
+                parameterInput.value = parameter.default_value || ''; 
+            }
+
+            parametersDiv.appendChild(parameterInput);
+        } 
+
+        if (parameter.in_out === 'OUT' || parameter.in_out === 'IN/OUT') {
+            var outputSpan = document.createElement('span');
+            outputSpan.textContent = ' (Output will be displayed after execution)';
+            outputSpan.style.fontStyle = 'italic';
+            parametersDiv.appendChild(outputSpan);
+        }
+
+        parametersDiv.appendChild(document.createElement('br'));
+    });
+}
+
 
 
 function getParametersForStoredProcedureInPackage(selectedStoredObjectName, selectedSchema, selectedPackage) {
@@ -104,22 +155,72 @@ function getParametersForStoredProcedureInPackage(selectedStoredObjectName, sele
         body: JSON.stringify({ storedobject_name: selectedStoredObjectName, schema: selectedSchema, package_name: selectedPackage })
     })
     .then(response => response.json())
-    .then(data => {
+    .then(parameterDetails => {
         var parametersDiv = document.getElementById('parameters_package');
         parametersDiv.innerHTML = '';
-        data.forEach(function(parameter) {
-            var parameterLabel = document.createElement('label');
-            parameterLabel.textContent = parameter.argument_name + ':';
-            parametersDiv.appendChild(parameterLabel);
-        
-            var parameterInput = document.createElement('input');
-            parameterInput.type = 'text';
-            parameterInput.value = parameter.default_value;
-            parameterInput.setAttribute('name', parameter.argument_name);
-            parametersDiv.appendChild(parameterInput);
-        });
+
+        let hasDateParameter = parameterDetails.some(param => param.data_type === "DATE");
+
+        if (hasDateParameter) {
+            fetch('/get_workdays', { method: 'GET' })
+            .then(response => response.json())
+            .then(workdays => {
+                if (workdays.error) {
+                    console.error('Error fetching workdays:', workdays.error);
+                    return;
+                }
+
+                renderParametersForPackage(parameterDetails, new Set(workdays));
+            })
+            .catch(error => console.error('Error fetching workdays:', error));
+        } else {
+            renderParametersForPackage(parameterDetails, null);
+        }
     })
-    .catch(error => console.error('Error:', error));
+    .catch(error => console.error('Error fetching parameters:', error));
+}
+
+function renderParametersForPackage(parameterDetails, validDates) {
+    var parametersDiv = document.getElementById('parameters_package');
+    parameterDetails.forEach(function(parameter) {
+        var parameterLabel = document.createElement('label');
+        parameterLabel.textContent = parameter.argument_name + ' (' + parameter.in_out + '):';
+        parametersDiv.appendChild(parameterLabel);
+
+        if (parameter.in_out === 'IN' || parameter.in_out === 'IN/OUT') {
+            var parameterInput = document.createElement('input');
+            parameterInput.setAttribute('name', parameter.argument_name);
+
+            if (parameter.data_type === "DATE") {
+                parameterInput.type = 'text';
+                parameterInput.classList.add('date-picker');
+
+                setTimeout(() => {
+                    $(parameterInput).datepicker({
+                        dateFormat: 'yy-mm-dd',
+                        beforeShowDay: function(date) {
+                            let formattedDate = $.datepicker.formatDate('yy-mm-dd', date);
+                            return [validDates ? validDates.has(formattedDate) : true];
+                        }
+                    });
+                }, 0);
+            } else {
+                parameterInput.type = 'text';
+                parameterInput.value = parameter.default_value || ''; 
+            }
+
+            parametersDiv.appendChild(parameterInput);
+        } 
+
+        if (parameter.in_out === 'OUT' || parameter.in_out === 'IN/OUT') {
+            var outputSpan = document.createElement('span');
+            outputSpan.textContent = ' (Output will be displayed after execution)';
+            outputSpan.style.fontStyle = 'italic';
+            parametersDiv.appendChild(outputSpan);
+        }
+
+        parametersDiv.appendChild(document.createElement('br'));
+    });
 }
 
 
@@ -237,6 +338,7 @@ function getTablesForSourceSchema(selectedSchema) {
 }
 
 
+
 document.addEventListener('DOMContentLoaded', function() {
     fetch('/get_workdays', {
         method: 'GET',
@@ -249,51 +351,55 @@ document.addEventListener('DOMContentLoaded', function() {
     })
     .then(data => {
         var dateSelect = document.getElementById('date');
+        if (dateSelect) {
+            var defaultOption = document.createElement('option');
+            defaultOption.value = "";
+            defaultOption.textContent = "no-date-selected";
+            defaultOption.disabled = true;
+            defaultOption.selected = true;
+            dateSelect.appendChild(defaultOption);
 
-        var defaultOption = document.createElement('option');
-        defaultOption.value = "";
-        defaultOption.textContent = "no-date-selected";
-        defaultOption.disabled = true;
-        defaultOption.selected = true;
-        dateSelect.appendChild(defaultOption);
-
-        data.forEach(function(day) {
-            var option = document.createElement('option');
-            option.value = day;
-            option.textContent = day;
-            dateSelect.appendChild(option);
-        });
-    })
-    .catch(error => console.error('Error:', error));
-});
-
-
-document.addEventListener('DOMContentLoaded', function() {
-    fetch('/get_workdays', {
-        method: 'GET',
-    })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error('Network response was not ok');
+            data.forEach(function(day) {
+                var option = document.createElement('option');
+                option.value = day;
+                option.textContent = day;
+                dateSelect.appendChild(option);
+            });
         }
-        return response.json();
-    })
-    .then(data => {
-        var dateSelect = document.getElementById('truncate_date');
 
-        var defaultOption = document.createElement('option');
-        defaultOption.value = "";
-        defaultOption.textContent = "no-date-selected";
-        defaultOption.disabled = true;
-        defaultOption.selected = true;
-        dateSelect.appendChild(defaultOption);
+        var truncateDateSelect = document.getElementById('truncate_date');
+        if (truncateDateSelect) {
+            truncateDateSelect.innerHTML = '';
 
-        data.forEach(function(day) {
-            var option = document.createElement('option');
-            option.value = day;
-            option.textContent = day;
-            dateSelect.appendChild(option);
-        });
+            var defaultOption = document.createElement('option');
+            defaultOption.value = "";
+            defaultOption.textContent = "no-date-selected";
+            defaultOption.selected = true;
+            truncateDateSelect.appendChild(defaultOption);
+
+            data.forEach(function(day) {
+                var option = document.createElement('option');
+                option.value = day;
+                option.textContent = day;
+                truncateDateSelect.appendChild(option);
+            });
+
+            let validDates = new Set(data);
+            $('#truncate_date').datepicker({
+                dateFormat: 'yy-mm-dd',
+                beforeShowDay: function(date) {
+                    let formattedDate = $.datepicker.formatDate('yy-mm-dd', date);
+                    return [validDates.has(formattedDate)];
+                },
+                onSelect: function(selectedDate) {
+                    truncateDateSelect.value = selectedDate;
+                }
+            });
+
+            truncateDateSelect.addEventListener('change', function() {
+                $('#truncate_date').datepicker('setDate', this.value || null);
+            });
+        }
     })
     .catch(error => console.error('Error:', error));
 });
@@ -365,7 +471,6 @@ function openPopup() {
 }
 
 
-
 function submitFormData() {
     let formData = {
         new_step_name: document.getElementById('new_step_name').value.trim(),
@@ -385,7 +490,8 @@ function submitFormData() {
         procedures_schema_package: null,
         storedpackage_name: null,
         storedobject_name_package: null,
-        parameters: {}
+        parameters: [],
+        parameter_details: [] // Add this to include parameter details
     };
 
     if (formData.step_type === 'TABLECOPY') {
@@ -412,7 +518,7 @@ function submitFormData() {
     } else if (formData.step_type === 'STORED_PROCEDURE') {
         formData.storedprocedure_type = document.getElementById('storedprocedure_type').value.trim();
 
-        if (formData.storedprocedure_type === 'Function_or_Procedure') {
+        if (formData.storedprocedure_type === 'SingleProcedure') {
             formData.procedures_schema = document.getElementById('procedures_schema').value.trim();
             formData.storedobject_name = document.getElementById('storedobject_name').value.trim();
 
@@ -429,11 +535,19 @@ function submitFormData() {
             .then(response => response.json())
             .then(parameterDetails => {
                 formData.parameter_details = parameterDetails;
+                formData.parameters = parameterDetails.map(parameter => {
+                    let paramName = parameter.argument_name;
+                    let paramType = parameter.in_out;
 
-                formData.parameters = Array.from(document.getElementById('parameters').getElementsByTagName('input')).reduce((acc, input) => {
-                    acc[input.name] = input.value.trim();
-                    return acc;
-                }, {});
+                    let paramInput = document.querySelector(`input[name="${paramName}"]`);
+                    let paramValue = paramInput ? paramInput.value.trim() : null;
+
+                    return {
+                        name: paramName,
+                        type: paramType,
+                        value: paramValue
+                    };
+                });
 
                 submitFormDataToServer(formData);
             })
@@ -460,12 +574,20 @@ function submitFormData() {
             })
             .then(response => response.json())
             .then(parameterDetails => {
-                formData.parameter_details = parameterDetails;
+                formData.parameter_details = parameterDetails; // Include parameter details
+                formData.parameters = parameterDetails.map(parameter => {
+                    let paramName = parameter.argument_name;
+                    let paramType = parameter.in_out;
 
-                formData.parameters = Array.from(document.getElementById('parameters_package').getElementsByTagName('input')).reduce((acc, input) => {
-                    acc[input.name] = input.value.trim();
-                    return acc;
-                }, {});
+                    let paramInput = document.querySelector(`input[name="${paramName}"]`);
+                    let paramValue = paramInput ? paramInput.value.trim() : null;
+
+                    return {
+                        name: paramName,
+                        type: paramType,
+                        value: paramValue
+                    };
+                });
 
                 submitFormDataToServer(formData);
             })
@@ -478,7 +600,6 @@ function submitFormData() {
         alert("Invalid step type selected.");
     }
 }
-
 
 function submitFormDataToServer(formData) {
     fetch('/add_step/' + test_id, {
@@ -502,6 +623,7 @@ function submitFormDataToServer(formData) {
         alert("There was an error submitting the form. Please try again.");
     });
 }
+
 
 
 
