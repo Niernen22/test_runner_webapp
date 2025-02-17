@@ -1,4 +1,4 @@
-CREATE OR REPLACE PACKAGE BODY TEST_RUNNER_REPO.TABLECOPY_PACKAGE AS
+CREATE OR REPLACE PACKAGE BODY TABLECOPY_PACKAGE AS
    FUNCTION TABLE_EXISTS(
        p_TABLE_OWNER VARCHAR2,
        p_TABLE_NAME VARCHAR2
@@ -441,7 +441,7 @@ PROCEDURE PARTITION_CURSOR_RANGE (
 BEGIN
     OPEN v_xml_cursor FOR
     WITH xmlform AS (
-        SELECT DBMS_XMLGEN.GETXMLTYPE('SELECT PARTITION_NAME, HIGH_VALUE, TABLE_NAME, TABLE_OWNER, TABLESPACE_NAME FROM DBA_TAB_PARTITIONS@ODS_PROD WHERE table_name = ''' || p_source_table || ''' AND table_owner = ''' || p_source_schema || '''') AS x
+        SELECT DBMS_XMLGEN.GETXMLTYPE('SELECT PARTITION_NAME, HIGH_VALUE, TABLE_NAME, TABLE_OWNER, TABLESPACE_NAME FROM DBA_TAB_PARTITIONS@ODS_PROD WHERE table_name = ''' || p_source_table || ''' AND table_owner = ''' || p_source_schema || ''' ORDER BY HIGH_VALUE') AS x
         FROM dual
     )
     SELECT xmltab.PARTITION_NAME, xmltab.HIGH_VALUE, xmltab.TABLESPACE_NAME
@@ -463,7 +463,7 @@ BEGIN
 
     --partíció létezés check
 
-SELECT COUNT(*)
+    SELECT COUNT(*)
     INTO v_partition_count
     FROM DBA_TAB_PARTITIONS
     WHERE TABLE_NAME = p_target_table
@@ -535,7 +535,7 @@ BEGIN
 --ha range partitioned, akkor p_tnd_filter+1 truncate
     IF v_partition_type1 = 'RANGE' AND v_partition_type2 = 'RANGE' THEN
 
-     v_tnd_name := 'P_' || TO_CHAR(p_tnd_filter + 1, 'YYYYMMDD');
+     v_tnd_name := 'P_' || TO_CHAR(p_tnd_filter, 'YYYYMMDD');
 
      SELECT COUNT(*)
      INTO v_tnd_partition
@@ -546,9 +546,9 @@ BEGIN
 
      IF v_tnd_partition  > 0 THEN
          EXECUTE IMMEDIATE 'ALTER TABLE ' || p_target_schema || '.' || p_target_table ||' TRUNCATE PARTITION ' || v_tnd_name;
-         DBMS_OUTPUT.PUT_LINE('Partition ' || v_tnd_name || ' deleted.');
+         DBMS_OUTPUT.PUT_LINE('Partition ' || v_tnd_name || ' truncated.');
 
-         ELSE
+         ELSE           
            EXECUTE IMMEDIATE 'DELETE FROM ' || p_target_schema || '.' || p_target_table ||
            ' WHERE TND = TO_DATE(''' || TO_CHAR(p_tnd_filter, 'YYYY-MM-DD') || ''', ''YYYY-MM-DD'')';
            DBMS_OUTPUT.PUT_LINE('Rows where TND is ' || v_tnd_name || ' deleted.');
@@ -715,7 +715,7 @@ BEGIN
 
     EXCEPTION
     WHEN NO_DATA_FOUND THEN
-        DBMS_OUTPUT.PUT_LINE(p_source_table || ' and/or '|| p_target_table || ' is not partitioned.');
+        DBMS_OUTPUT.PUT_LINE('Data not found.');
 
 END RANGE_OR_LIST;
 ---------------------------------------------------------------------------------------------------------------------------------------------------
@@ -754,7 +754,7 @@ BEGIN
         p_target_table => p_target_table
         );
 
-     v_tnd_name := 'P_' || TO_CHAR(p_tnd_filter + 1, 'YYYYMMDD');
+     v_tnd_name := 'P_' || TO_CHAR(p_tnd_filter, 'YYYYMMDD');
 
     SELECT COUNT(*)
     INTO v_partition_count
@@ -863,6 +863,8 @@ END RANGE_OR_LIST_TND;
         v_autoextend_size NUMBER;
         v_bigfile VARCHAR2(10);
         v_datafile_count NUMBER;
+        v_source_tnd_column NUMBER;
+        v_target_tnd_column NUMBER;
 
 BEGIN
 --------------------Léteznek a táblák?
@@ -908,6 +910,24 @@ BEGIN
      );
 --------------------Ha van TND szűrés...
      ELSE
+     -----------Check hogy van-e tnd oszlop. Hiba ha nincs.
+     SELECT COUNT(*) INTO v_source_tnd_column FROM all_tab_columns@ODS_PROD WHERE TABLE_NAME = p_source_table AND OWNER = p_source_schema
+     AND COLUMN_NAME = 'TND';
+     
+     IF v_source_tnd_column = 0 THEN     
+     DBMS_OUTPUT.PUT_LINE('Can''t filter for tnd, missing tnd column in source table: ' || p_source_table);
+     RAISE_APPLICATION_ERROR(-20002, 'Can''t filter for tnd, missing tnd column in source table: ' || p_source_table);
+
+     END IF;
+     
+     SELECT COUNT(*) INTO v_target_tnd_column FROM all_tab_columns WHERE TABLE_NAME = p_target_table AND OWNER = p_target_schema
+     AND COLUMN_NAME = 'TND';
+     
+     IF v_target_tnd_column = 0 THEN
+     DBMS_OUTPUT.PUT_LINE('Can''t filter for tnd, missing tnd column in target table: ' || p_target_table);
+     RAISE_APPLICATION_ERROR(-20002, 'Can''t filter for tnd, missing tnd column in target table: ' || p_target_table);
+     END IF;
+     
      -----------------HA van TND szűrés és truncatelni kell...
      IF p_TRUNCATE = TRUE THEN
     TABLECOPY_PACKAGE.TRUNCATE_TND_TABLE
@@ -947,12 +967,13 @@ BEGIN
     p_target_table => p_target_table
     );
 
-   TABLECOPY_PACKAGE.COPY_COLUMNS
-    (p_source_schema => p_source_schema,
-     p_source_table => p_source_table,
-     p_target_schema => p_target_schema,
-     p_target_table => p_target_table
-     );
+    TABLECOPY_PACKAGE.COPY_COLUMNS_TND(
+    p_tnd_filter => p_tnd_filter,
+    p_source_schema => p_source_schema,
+    p_source_table => p_source_table,
+    p_target_schema => p_target_schema,
+    p_target_table => p_target_table
+    );
 -----------------Ha van TND szűrés, de nincs meg a hozzátartozó partíció, nem partícionált, adatok másolása
     ELSE
     TABLECOPY_PACKAGE.COPY_COLUMNS_TND(
@@ -989,4 +1010,3 @@ BEGIN
 COMMIT;
 END TABLECOPY;
 END TABLECOPY_PACKAGE;
-/
