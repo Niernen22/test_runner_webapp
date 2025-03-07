@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -32,7 +33,7 @@
                 <td>{{ step['TYPE'] }}</td>
                 <td>{{ step['SQL_CODE'] }}</td>
                 <td>
-                    <form action="/delete_step" method="post">
+                    <form action="{{ url_for('delete_step') }}" method="post">
                         <input type="hidden" name="id" value="{{ step['ID'] }}">
                         <input type="hidden" name="test_id" value="{{ test_id }}">
                         <button type="submit">Delete</button>
@@ -199,6 +200,7 @@
     
     <script>
          test_id="{{ test_id }}"
+         const SCRIPT_ROOT = {{ request.script_root|tojson }}
     </script>    
     <script src="{{ url_for('static', filename='js/edit_steps.js') }}"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
