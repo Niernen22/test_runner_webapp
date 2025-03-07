@@ -3,7 +3,7 @@ document.getElementById('RunPlanButton').addEventListener('click', function(even
 
     const test_id = window.location.pathname.split('/').pop();
 
-    fetch(`/run_test/${test_id}`, {
+    fetch(SCRIPT_ROOT + `/run_test/${test_id}`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -13,7 +13,7 @@ document.getElementById('RunPlanButton').addEventListener('click', function(even
           if (data.success) {
               alert(`Test started successfully! Refresh the page or check the logs for updates. Run ID: ${data.v_run_id}`);
 
-              window.location.href = `/test_steps/${test_id}`;
+              window.location.href =SCRIPT_ROOT + `/test_steps/${test_id}`;
           } else {
               alert('Error starting test: ' + data.error);
           }
