@@ -1,4 +1,4 @@
-CREATE OR REPLACE PACKAGE BODY TEST_RUNNER_REPO.TEST_PACKAGE IS
+CREATE OR REPLACE PACKAGE BODY TEST_PACKAGE IS
 --------------------------------------------------------------------------------------------------------------------------------------------------------
   PROCEDURE SCHEDULER_JOBLOG (v_name IN VARCHAR2, v_sqlcode IN TEST_STEPS.SQL_CODE%TYPE, 
   v_targetuser in TEST_STEPS.TARGET_USER%TYPE, v_schstatus IN OUT VARCHAR2) IS
@@ -160,7 +160,7 @@ CREATE OR REPLACE PACKAGE BODY TEST_RUNNER_REPO.TEST_PACKAGE IS
     FROM TESTS
     WHERE ID = v_id;
 
-    IF v_status = 'RUNNING' THEN
+    IF nvl(v_status, 'Unknown') = 'RUNNING' THEN
       RETURN NULL; -- Return NULL if the test is already running
     END IF;
 
@@ -175,7 +175,6 @@ CREATE OR REPLACE PACKAGE BODY TEST_RUNNER_REPO.TEST_PACKAGE IS
         RETURN NULL;
     END;
 
-    IF nvl(v_status, 'Unknown') != 'RUNNING' THEN
       SELECT run_id_seq.NEXTVAL INTO v_run_id FROM dual;
 
       UPDATE TESTS
@@ -195,11 +194,6 @@ CREATE OR REPLACE PACKAGE BODY TEST_RUNNER_REPO.TEST_PACKAGE IS
       );
 
       RETURN v_run_id;
-
-    ELSE
-      ROLLBACK;
-      RETURN NULL;
-    END IF;
   END TEST_RUNNER;
 
 END TEST_PACKAGE;
