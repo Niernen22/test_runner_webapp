@@ -46,7 +46,7 @@ function showSPParametersForm() {
 
 function getProceduresForSchema(selectedSchema) {
     var storedObjectSelect = document.getElementById('storedobject_name');
-    fetch('/get_procedures_for_schema', {
+    fetch(SCRIPT_ROOT + '/get_procedures_for_schema', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -68,7 +68,7 @@ function getProceduresForSchema(selectedSchema) {
 
 
 function getParametersForStoredProcedure(selectedStoredObjectName, selectedSchema) {
-    fetch('/get_parameters_for_stored_procedure', {
+    fetch(SCRIPT_ROOT + '/get_parameters_for_stored_procedure', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -83,7 +83,7 @@ function getParametersForStoredProcedure(selectedStoredObjectName, selectedSchem
         let hasDateParameter = parameterDetails.some(param => param.data_type === "DATE");
 
         if (hasDateParameter) {
-            fetch('/get_workdays', { method: 'GET' })
+            fetch(SCRIPT_ROOT + '/get_workdays', { method: 'GET' })
             .then(response => response.json())
             .then(workdays => {
                 if (workdays.error) {
@@ -147,7 +147,7 @@ function renderParameters(parameterDetails, validDates) {
 
 
 function getParametersForStoredProcedureInPackage(selectedStoredObjectName, selectedSchema, selectedPackage) {
-    fetch('/get_parameters_for_stored_procedure_in_package', {
+    fetch(SCRIPT_ROOT + '/get_parameters_for_stored_procedure_in_package', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -162,7 +162,7 @@ function getParametersForStoredProcedureInPackage(selectedStoredObjectName, sele
         let hasDateParameter = parameterDetails.some(param => param.data_type === "DATE");
 
         if (hasDateParameter) {
-            fetch('/get_workdays', { method: 'GET' })
+            fetch(SCRIPT_ROOT + '/get_workdays', { method: 'GET' })
             .then(response => response.json())
             .then(workdays => {
                 if (workdays.error) {
@@ -226,7 +226,7 @@ function renderParametersForPackage(parameterDetails, validDates) {
 
 function getPackagesForSchema(selectedSchema) {
     var storedPackageSelect = document.getElementById('storedpackage_name');
-    fetch('/get_packages_for_schema', {
+    fetch(SCRIPT_ROOT + '/get_packages_for_schema', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -249,7 +249,7 @@ function getPackagesForSchema(selectedSchema) {
 
 function getProceduresForPackage(selectedPackage, selectedSchema) {
     var storedObjectSelect = document.getElementById('storedobject_name_package');
-    fetch('/get_procedures_for_package', {
+    fetch(SCRIPT_ROOT + '/get_procedures_for_package', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -272,7 +272,7 @@ function getProceduresForPackage(selectedPackage, selectedSchema) {
 
 function getTablesForTargetSchema(selectedSchema) {
     var targetTableSelect = document.getElementById('target_table');
-    fetch('/get_tables_for_schema', {
+    fetch(SCRIPT_ROOT + '/get_tables_for_schema', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -294,7 +294,7 @@ function getTablesForTargetSchema(selectedSchema) {
 
 function getTablesForTruncateSchema(selectedSchema) {
     var truncateTableSelect = document.getElementById('truncate_table');
-    fetch('/get_tables_for_schema', {
+    fetch(SCRIPT_ROOT + '/get_tables_for_schema', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -317,7 +317,7 @@ function getTablesForTruncateSchema(selectedSchema) {
 
 function getTablesForSourceSchema(selectedSchema) {
     var sourceTableSelect = document.getElementById('source_table');
-    fetch('/get_tables_for_prod_schema', {
+    fetch(SCRIPT_ROOT + '/get_tables_for_prod_schema', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -340,7 +340,7 @@ function getTablesForSourceSchema(selectedSchema) {
 
 
 document.addEventListener('DOMContentLoaded', function() {
-    fetch('/get_workdays', {
+    fetch(SCRIPT_ROOT + '/get_workdays', {
         method: 'GET',
     })
     .then(response => {
@@ -408,7 +408,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function getNamesForModule(selectedModule) {
     var nameSelect = document.getElementById('name');
-    fetch('/get_names_for_module', {
+    fetch(SCRIPT_ROOT + '/get_names_for_module', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -431,7 +431,7 @@ function getNamesForModule(selectedModule) {
 
 function getTypesForModule(selectedModule) {
     var typeSelect = document.getElementById('type');
-    fetch('/get_types_for_module', {
+    fetch(SCRIPT_ROOT + '/get_types_for_module', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -522,7 +522,7 @@ function submitFormData() {
             formData.procedures_schema = document.getElementById('procedures_schema').value.trim();
             formData.storedobject_name = document.getElementById('storedobject_name').value.trim();
 
-            fetch('/get_parameters_for_stored_procedure', {
+            fetch(SCRIPT_ROOT + '/get_parameters_for_stored_procedure', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -561,7 +561,7 @@ function submitFormData() {
             formData.storedpackage_name = document.getElementById('storedpackage_name').value.trim();
             formData.storedobject_name_package = document.getElementById('storedobject_name_package').value.trim();
 
-            fetch('/get_parameters_for_stored_procedure_in_package', {
+            fetch(SCRIPT_ROOT + '/get_parameters_for_stored_procedure_in_package', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -574,7 +574,7 @@ function submitFormData() {
             })
             .then(response => response.json())
             .then(parameterDetails => {
-                formData.parameter_details = parameterDetails; // Include parameter details
+                formData.parameter_details = parameterDetails;
                 formData.parameters = parameterDetails.map(parameter => {
                     let paramName = parameter.argument_name;
                     let paramType = parameter.in_out;
@@ -602,7 +602,7 @@ function submitFormData() {
 }
 
 function submitFormDataToServer(formData) {
-    fetch('/add_step/' + test_id, {
+    fetch(SCRIPT_ROOT + '/add_step/' + test_id, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -690,7 +690,7 @@ function finishEditing() {
         data.push({ id: id, order_number: index + 1 });
     });
 
-    fetch('/update_order', {
+    fetch(SCRIPT_ROOT + '/update_order', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -701,7 +701,7 @@ function finishEditing() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            window.location.href = `/test_steps/${test_id}`;
+            window.location.href =SCRIPT_ROOT + `/test_steps/${test_id}`;
         } else {
             alert('Error updating order');
         }
