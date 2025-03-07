@@ -50,7 +50,10 @@
         </tbody>
     </table>
 
-    <script src="{{ url_for('static', filename='js/test_steps.js') }}"></script>
+    <script>
+        const SCRIPT_ROOT = {{ request.script_root|tojson }}
+   </script>  
+   <script src="{{ url_for('static', filename='js/test_steps.js') }}"></script>
 
 </body>
 </html>
