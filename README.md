@@ -7,6 +7,7 @@ At the moment the following is available:
   - Add User: create and delete users (alternatively, there's script for both of these functions to run in the terminal independently without login: create_user.py, delete_user.py)
   - Users: Listing all users, showing admin prviliges
     ONLY ADMINS can add or delete users on the page and see these buttons. Unpriviliged users can see the user list if they copy the url, but not the functions.
+-Password change is available under 'Account'
 - Main Page: Jobs and their statuses
 - Test Steps for Test ID [..]: Test job's steps
 - Edit Steps: Delete and Add steps for a job (ID, Test ID, Step Name, Order Number, Type, SQL Code, Target User
