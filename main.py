@@ -122,6 +122,39 @@ def delete_user(user_id):
     return redirect(url_for('manage_users'))
 
 
+@app.route('/account')
+@login_required
+def account():
+    return render_template('account.html')
+
+
+@app.route('/change_password', methods=['POST'])
+@login_required
+def change_password():
+    current_password = request.form['current_password']
+    new_password = request.form['new_password']
+
+    connection = pool.acquire()
+    cursor = connection.cursor()
+    query = "SELECT password FROM users WHERE id = :id"
+    cursor.execute(query, {'id': current_user.id})
+    row = cursor.fetchone()
+
+    if row and check_password_hash(row[0], current_password):
+        update_query = "UPDATE users SET password = :password WHERE id = :id"
+        cursor.execute(update_query, {'password': generate_password_hash(new_password), 'id': current_user.id})
+        connection.commit()
+        cursor.close()
+        pool.release(connection)
+        return redirect(url_for('index'))
+    else:
+        cursor.close()
+        pool.release(connection)
+        return 'Invalid current password', 400
+
+
+
+
 @app.errorhandler(404)
 def page_not_found(error):
     return "Page not found", 404
