@@ -60,7 +60,7 @@ def manage_users():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form['username']
+        username = request.form['username'].upper()
         password = request.form['password']
         connection = pool.acquire()
         cursor = connection.cursor()
@@ -151,7 +151,6 @@ def change_password():
         cursor.close()
         pool.release(connection)
         return 'Invalid current password', 400
-
 
 
 
@@ -519,7 +518,7 @@ def add_step(test_id):
             for param in parameters:
                 param_name = param['name']
                 param_type = param['type']
-                param_value = default_if_none(param['value'])
+                param_value = param['value']
 
                 param_detail = next((p for p in parameter_details if p['argument_name'] == param_name), None)
                 if not param_detail:
@@ -539,8 +538,9 @@ def add_step(test_id):
                     sql_output.append(f"DBMS_OUTPUT.PUT_LINE({param_name});")
 
                 else:
-                    formatted_value = format_parameter(param_value, data_type)
-                    sql_exec_params.append(formatted_value)
+                    if param_value not in (None, ''):
+                        formatted_value = format_parameter(param_value, data_type)
+                        sql_exec_params.append(f"{param_name} => {formatted_value}")
 
             declare_section = ""
             if sql_declare:
