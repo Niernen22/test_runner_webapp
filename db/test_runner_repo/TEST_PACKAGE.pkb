@@ -1,4 +1,4 @@
-CREATE OR REPLACE PACKAGE BODY TEST_RUNNER_REPO.TEST_PACKAGE IS
+create or replace PACKAGE BODY                  TEST_PACKAGE IS
 --------------------------------------------------------------------------------------------------------------------------------------------------------
   PROCEDURE SCHEDULER_JOBLOG (v_name IN VARCHAR2, v_sqlcode IN TEST_STEPS.SQL_CODE%TYPE, 
   v_targetuser in TEST_STEPS.TARGET_USER%TYPE, v_schstatus IN OUT VARCHAR2) IS
@@ -39,11 +39,13 @@ CREATE OR REPLACE PACKAGE BODY TEST_RUNNER_REPO.TEST_PACKAGE IS
   BEGIN
     UPDATE TEST_STEPS
     SET STATUS = 'INIT'
-    WHERE TEST_ID = v_id;
+    WHERE TEST_ID = v_id
+    AND ACTIVITY != 'INACTIVE';
     COMMIT;
 
     FOR steporder IN (SELECT * FROM TEST_STEPS
                       WHERE TEST_ID = v_id
+                      AND ACTIVITY != 'INACTIVE'
                       ORDER BY ORDERNUMBER) LOOP
       dbms_output.put_line(steporder.NAME);
 
@@ -93,7 +95,7 @@ CREATE OR REPLACE PACKAGE BODY TEST_RUNNER_REPO.TEST_PACKAGE IS
       WHERE job_name = UPPER(v_name)
       AND OWNER = v_targetuser;
       DBMS_OUTPUT.PUT_LINE(v_output);
-      
+
       IF INSTR(v_output, 'Failed') > 0 THEN
       v_schstatus := 'FAILED';
       END IF;
@@ -109,12 +111,12 @@ CREATE OR REPLACE PACKAGE BODY TEST_RUNNER_REPO.TEST_PACKAGE IS
       COMMIT;
 
       IF v_schstatus != 'SUCCEEDED' THEN
-    
+
     UPDATE TESTS
     SET STATUS = v_schstatus, START_TIME = v_start_time, END_TIME = v_end_time
     WHERE ID = v_id;
     COMMIT;
-      
+
         EXIT;
       END IF;
     END LOOP;
@@ -154,14 +156,14 @@ CREATE OR REPLACE PACKAGE BODY TEST_RUNNER_REPO.TEST_PACKAGE IS
     INSERT INTO TEST_RUN_LOG (RUN_ID, TEST_ID, TEST_NAME, EVENT, EVENT_TIME, ERROR_MESSAGE)
     VALUES (v_run_id, v_id, v_test_name, v_schstatus, SYSTIMESTAMP, v_error);
     COMMIT;
-    
+
     EXCEPTION
         WHEN OTHERS THEN
              UPDATE TESTS
             SET STATUS = 'FAILED', START_TIME = v_start_time, END_TIME = sysdate
             WHERE ID = v_id;
             COMMIT;
-    
+
   END RUN_TEST;
 --------------------------------------------------------------------------------------------------------------------------------------------------------
   FUNCTION TEST_RUNNER(v_id IN TESTS.ID%TYPE) RETURN NUMBER IS
