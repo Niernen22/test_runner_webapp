@@ -15,6 +15,7 @@
     <form action="{{ url_for('run_test', test_id=test_id )}}" method="POST">
         <button id="RunPlanButton">Run Test Plan</button>
     </form>
+    <p>Actual TND: {{ tnd_data }}</p> 
     <table border="1">
         <thead>
             <tr>
