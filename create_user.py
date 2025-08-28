@@ -3,8 +3,8 @@ import oracledb
 import config
 
 def create_user():
-    username = 'admin'
-    password = 'adminpassword_123'
+    username = 'username'.upper()
+    password = 'password'
     hashed_password = generate_password_hash(password, method='pbkdf2:sha256')
 
     dsn = config.dsn
@@ -21,7 +21,7 @@ def create_user():
         """
 
         with connection.cursor() as cursor:
-            cursor.execute(sql, username=username, password=hashed_password, is_admin=1)  # Assuming is_admin is 1 for admin user
+            cursor.execute(sql, username=username, password=hashed_password, is_admin=1)  # is_admin is 1 for admin user
             connection.commit()
 
     except Exception as e:
