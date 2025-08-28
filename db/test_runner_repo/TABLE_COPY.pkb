@@ -206,7 +206,7 @@ PROCEDURE COPY_COLUMNS (
   v_dblink_sql VARCHAR2(20) := '@ODS_PROD';
 
 BEGIN
-    SELECT LISTAGG(t1.COLUMN_NAME, ', ') WITHIN GROUP (ORDER BY t1.COLUMN_NAME)
+    SELECT RTRIM(XMLAGG(XMLELEMENT(e, t1.COLUMN_NAME || ', ').EXTRACT('//text()') ORDER BY t1.COLUMN_NAME).GetClobVal(), ', ')
     INTO v_column_list
     FROM (SELECT COLUMN_NAME FROM all_tab_columns@ODS_PROD WHERE TABLE_NAME = p_source_table AND OWNER = p_source_schema) t1
     JOIN (SELECT COLUMN_NAME FROM all_tab_columns WHERE TABLE_NAME = p_target_table AND OWNER = p_target_schema) t2
@@ -238,7 +238,7 @@ BEGIN
 
     IF tnd_column > 0 THEN
 
-    SELECT LISTAGG(t1.COLUMN_NAME, ', ') WITHIN GROUP (ORDER BY t1.COLUMN_NAME)
+    SELECT RTRIM(XMLAGG(XMLELEMENT(e, t1.COLUMN_NAME || ', ').EXTRACT('//text()') ORDER BY t1.COLUMN_NAME).GetClobVal(), ', ')
     INTO v_column_list
     FROM (SELECT COLUMN_NAME FROM all_tab_columns@ODS_PROD WHERE TABLE_NAME = p_source_table AND OWNER = p_source_schema) t1
     JOIN (SELECT COLUMN_NAME FROM all_tab_columns WHERE TABLE_NAME = p_target_table AND OWNER = p_target_schema) t2
@@ -441,7 +441,7 @@ PROCEDURE PARTITION_CURSOR_RANGE (
 BEGIN
     OPEN v_xml_cursor FOR
     WITH xmlform AS (
-        SELECT DBMS_XMLGEN.GETXMLTYPE('SELECT PARTITION_NAME, HIGH_VALUE, TABLE_NAME, TABLE_OWNER, TABLESPACE_NAME FROM DBA_TAB_PARTITIONS@ODS_PROD WHERE table_name = ''' || p_source_table || ''' AND table_owner = ''' || p_source_schema || ''' ORDER BY HIGH_VALUE') AS x
+        SELECT DBMS_XMLGEN.GETXMLTYPE('SELECT PARTITION_NAME, HIGH_VALUE, TABLE_NAME, TABLE_OWNER, TABLESPACE_NAME FROM DBA_TAB_PARTITIONS@ODS_PROD WHERE table_name = ''' || p_source_table || ''' AND table_owner = ''' || p_source_schema || '''') AS x
         FROM dual
     )
     SELECT xmltab.PARTITION_NAME, xmltab.HIGH_VALUE, xmltab.TABLESPACE_NAME
@@ -548,7 +548,7 @@ BEGIN
          EXECUTE IMMEDIATE 'ALTER TABLE ' || p_target_schema || '.' || p_target_table ||' TRUNCATE PARTITION ' || v_tnd_name;
          DBMS_OUTPUT.PUT_LINE('Partition ' || v_tnd_name || ' truncated.');
 
-         ELSE           
+         ELSE
            EXECUTE IMMEDIATE 'DELETE FROM ' || p_target_schema || '.' || p_target_table ||
            ' WHERE TND = TO_DATE(''' || TO_CHAR(p_tnd_filter, 'YYYY-MM-DD') || ''', ''YYYY-MM-DD'')';
            DBMS_OUTPUT.PUT_LINE('Rows where TND is ' || v_tnd_name || ' deleted.');
@@ -913,21 +913,21 @@ BEGIN
      -----------Check hogy van-e tnd oszlop. Hiba ha nincs.
      SELECT COUNT(*) INTO v_source_tnd_column FROM all_tab_columns@ODS_PROD WHERE TABLE_NAME = p_source_table AND OWNER = p_source_schema
      AND COLUMN_NAME = 'TND';
-     
-     IF v_source_tnd_column = 0 THEN     
+
+     IF v_source_tnd_column = 0 THEN
      DBMS_OUTPUT.PUT_LINE('Can''t filter for tnd, missing tnd column in source table: ' || p_source_table);
      RAISE_APPLICATION_ERROR(-20002, 'Can''t filter for tnd, missing tnd column in source table: ' || p_source_table);
 
      END IF;
-     
+
      SELECT COUNT(*) INTO v_target_tnd_column FROM all_tab_columns WHERE TABLE_NAME = p_target_table AND OWNER = p_target_schema
      AND COLUMN_NAME = 'TND';
-     
+
      IF v_target_tnd_column = 0 THEN
      DBMS_OUTPUT.PUT_LINE('Can''t filter for tnd, missing tnd column in target table: ' || p_target_table);
      RAISE_APPLICATION_ERROR(-20002, 'Can''t filter for tnd, missing tnd column in target table: ' || p_target_table);
      END IF;
-     
+
      -----------------HA van TND szűrés és truncatelni kell...
      IF p_TRUNCATE = TRUE THEN
     TABLECOPY_PACKAGE.TRUNCATE_TND_TABLE
@@ -1008,5 +1008,58 @@ BEGIN
 
  END IF;
 COMMIT;
+     IF p_target_schema = 'STAGE' THEN
+        ods_meta.set_stage_data_last_tnd('STAGE', p_target_table);
+     END IF;
+        
 END TABLECOPY;
+
+
+PROCEDURE TABLECOPY_MAX (
+    p_source_schema VARCHAR2,
+    p_source_table VARCHAR2,
+    p_target_schema VARCHAR2,
+    p_target_table VARCHAR2,
+    p_truncate BOOLEAN DEFAULT FALSE
+) IS
+    p_tnd_filter DATE;
+BEGIN
+    EXECUTE IMMEDIATE 'SELECT MAX(tnd) FROM ' || p_source_schema || '.' || p_source_table ||'@ODS_PROD'
+    INTO p_tnd_filter;
+    
+    DBMS_OUTPUT.PUT_LINE('MAX TND: ' || p_tnd_filter);
+
+    TABLECOPY_PACKAGE.TABLECOPY(
+    p_tnd_filter => p_tnd_filter,
+    p_source_schema => p_source_schema,
+    p_source_table => p_source_table,
+    p_target_schema => p_target_schema,
+    p_target_table => p_target_table,
+    p_truncate => p_truncate
+    );
+END TABLECOPY_MAX;
+
+PROCEDURE TABLECOPY_CURRENT (
+    p_source_schema VARCHAR2,
+    p_source_table VARCHAR2,
+    p_target_schema VARCHAR2,
+    p_target_table VARCHAR2,
+    p_truncate BOOLEAN DEFAULT FALSE
+) IS
+    p_tnd_filter DATE;
+BEGIN
+    EXECUTE IMMEDIATE 'SELECT get_tnd FROM dual' INTO p_tnd_filter;
+    
+    DBMS_OUTPUT.PUT_LINE('CURRENT TND: ' || p_tnd_filter);
+
+    TABLECOPY_PACKAGE.TABLECOPY(
+    p_tnd_filter => p_tnd_filter,
+    p_source_schema => p_source_schema,
+    p_source_table => p_source_table,
+    p_target_schema => p_target_schema,
+    p_target_table => p_target_table,
+    p_truncate => p_truncate
+    );
+END TABLECOPY_CURRENT;
+
 END TABLECOPY_PACKAGE;
