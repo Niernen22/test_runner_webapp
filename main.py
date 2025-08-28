@@ -121,6 +121,46 @@ def delete_user(user_id):
 
     return redirect(url_for('manage_users'))
 
+@app.route('/admin_change_password/<int:user_id>', methods=['GET', 'POST'])
+@login_required
+def admin_change_password(user_id):
+    if not current_user.is_admin:
+        return "Access denied", 403
+
+    connection = pool.acquire()
+    cursor = connection.cursor()
+
+    if request.method == 'POST':
+        new_password = request.form['password']
+        hashed_password = generate_password_hash(new_password, method='pbkdf2:sha256')
+
+        cursor.execute("""
+            UPDATE users
+            SET password = :password
+            WHERE id = :user_id
+        """, {'password': hashed_password, 'user_id': user_id})
+        connection.commit()
+
+        cursor.execute("SELECT id, username FROM users WHERE id = :id", {'id': user_id})
+        user = cursor.fetchone()
+
+        cursor.close()
+        pool.release(connection)
+
+        return render_template('admin_change_password.html', user=user, success=True)
+
+    cursor.execute("SELECT id, username FROM users WHERE id = :id", {'id': user_id})
+    user = cursor.fetchone()
+    cursor.close()
+    pool.release(connection)
+
+    if not user:
+        return "User not found", 404
+
+    return render_template('admin_change_password.html', user=user)
+
+
+
 
 @app.route('/account')
 @login_required
@@ -305,9 +345,13 @@ def test_steps(test_id):
         for row in cursor.fetchall():
             test_steps_data.append(dict(zip(column_names, row)))
 
+        tnd_query = "SELECT get_tnd FROM dual"
+        cursor.execute(tnd_query)
+        tnd_data = cursor.fetchone()[0]
+
         cursor.close()
 
-        return render_template('test_steps.html', test_id=test_id, test_steps=test_steps_data)
+        return render_template('test_steps.html', test_id=test_id, test_steps=test_steps_data, tnd_data=tnd_data)
     
     except oracledb.Error as error:
         return f"Error retrieving test steps: {error}"
@@ -332,27 +376,27 @@ def edit_steps(test_id):
 
         sql = "SELECT USERNAME FROM DBA_USERS ORDER BY USERNAME ASC"
         cursor.execute(sql)
-        usernames = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
+        usernames = [row[0] for row in cursor.fetchall()]
 
         sql = "SELECT USERNAME FROM DBA_USERS@ODS_PROD ORDER BY USERNAME ASC"
         cursor.execute(sql)
-        prod_usernames = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
+        prod_usernames = [row[0] for row in cursor.fetchall()]
 
         sql = "SELECT DISTINCT(MODULE) FROM LM.INV_JOBS ORDER BY MODULE ASC"
         cursor.execute(sql)
-        modules = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
+        modules = [row[0] for row in cursor.fetchall()]
 
         sql = "SELECT DISTINCT(OBJECT_NAME) FROM DBA_PROCEDURES WHERE OBJECT_TYPE = 'PROCEDURE' ORDER BY OBJECT_NAME ASC"
         cursor.execute(sql)
-        storedobject_names = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
+        storedobject_names = [row[0] for row in cursor.fetchall()]
 
         sql = "SELECT DISTINCT(OWNER) FROM DBA_PROCEDURES ORDER BY OWNER ASC"
         cursor.execute(sql)
-        procedures_schemas = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
+        procedures_schemas = [row[0] for row in cursor.fetchall()]
 
         sql = "SELECT DISTINCT(PROCEDURE_NAME) FROM DBA_PROCEDURES WHERE OBJECT_TYPE = 'PACKAGE' ORDER BY PROCEDURE_NAME ASC"
         cursor.execute(sql)
-        storedpackage_names = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
+        storedpackage_names = [row[0] for row in cursor.fetchall()]
 
         cursor.close()
 
@@ -435,7 +479,31 @@ def add_step(test_id):
             truncate = default_if_none(data.get('truncate'))
             chosen_date = default_if_none(data.get('date'))
 
-            if chosen_date is None:
+            if chosen_date == "CURRENT_TND":
+                sql_code = f"""
+                BEGIN 
+                    TABLECOPY_PACKAGE.TABLECOPY_CURRENT(
+                        p_source_schema => '{source_schema}', 
+                        p_source_table => '{source_table}', 
+                        p_target_schema => '{target_schema}', 
+                        p_target_table => '{target_table}', 
+                        p_truncate => {truncate}
+                    ); 
+                END;
+                """
+            elif chosen_date == "MAX_TND":
+                sql_code = f"""
+                BEGIN 
+                    TABLECOPY_PACKAGE.TABLECOPY_MAX(
+                        p_source_schema => '{source_schema}', 
+                        p_source_table => '{source_table}', 
+                        p_target_schema => '{target_schema}', 
+                        p_target_table => '{target_table}', 
+                        p_truncate => {truncate}
+                    ); 
+                END;
+                """
+            elif chosen_date is None or chosen_date == "":
                 sql_code = f"""
                 BEGIN 
                     TABLECOPY_PACKAGE.TABLECOPY(
@@ -448,7 +516,7 @@ def add_step(test_id):
                     ); 
                 END;
                 """
-            else:
+            else: 
                 sql_code = f"""
                 BEGIN 
                     TABLECOPY_PACKAGE.TABLECOPY(
@@ -461,6 +529,7 @@ def add_step(test_id):
                     ); 
                 END;
                 """
+
 
         elif step_type == 'TRUNCATE_TABLE':
             target_user = 'TEST_RUNNER_REPO'
@@ -626,7 +695,7 @@ def get_tables_for_schema():
         cursor = connection.cursor()
         sql = "SELECT table_name FROM all_tables WHERE owner = :schema order by table_name asc"
         cursor.execute(sql, {'schema': selected_schema})
-        table_names = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
+        table_names = [row[0] for row in cursor.fetchall()]
         cursor.close()
         pool.release(connection)
         return json.dumps(table_names)
@@ -643,7 +712,7 @@ def get_tables_for_prod_schema():
         cursor = connection.cursor()
         sql = "SELECT table_name FROM all_tables@ods_prod WHERE owner = :schema order by table_name asc"
         cursor.execute(sql, {'schema': selected_schema})
-        table_names = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
+        table_names = [row[0] for row in cursor.fetchall()]
         cursor.close()
         pool.release(connection)
         return json.dumps(table_names)
@@ -660,7 +729,7 @@ def get_procedures_for_schema():
         cursor = connection.cursor()
         sql = "SELECT DISTINCT(OBJECT_NAME) FROM DBA_PROCEDURES WHERE OBJECT_TYPE = 'PROCEDURE' AND OWNER = :schema order by object_name asc"
         cursor.execute(sql, {'schema': selected_schema})
-        procedure_names = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
+        procedure_names = [row[0] for row in cursor.fetchall()]
         cursor.close()
         pool.release(connection)
         return json.dumps(procedure_names)
@@ -753,7 +822,7 @@ def get_packages_for_schema():
         cursor = connection.cursor()
         sql = "SELECT OBJECT_NAME FROM DBA_OBJECTS WHERE OBJECT_TYPE = 'PACKAGE BODY' AND OWNER = :schema order by object_name asc"
         cursor.execute(sql, {'schema': selected_schema})
-        package_names = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
+        package_names = [row[0] for row in cursor.fetchall()]
         cursor.close()
         pool.release(connection)
         return json.dumps(package_names)
@@ -771,7 +840,7 @@ def get_procedures_for_package():
         cursor = connection.cursor()
         sql = "SELECT PROCEDURE_NAME FROM DBA_PROCEDURES WHERE OBJECT_TYPE = 'PACKAGE' AND PROCEDURE_NAME IS NOT NULL AND OWNER = :schema AND OBJECT_NAME = :package order by procedure_name asc"
         cursor.execute(sql, {'schema': selected_schema, 'package': selected_package})
-        procedure_names = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
+        procedure_names = [row[0] for row in cursor.fetchall()]
         cursor.close()
         pool.release(connection)
         return json.dumps(procedure_names)
@@ -787,7 +856,7 @@ def get_workdays():
         cursor = connection.cursor()
         sql = "SELECT T_DATE FROM STA.TR_DATE WHERE WORK_DAY = 'Y' AND T_DATE BETWEEN ADD_MONTHS(TRUNC(SYSDATE, 'YEAR'), -12) AND LAST_DAY(SYSDATE) ORDER BY T_DATE DESC"
         cursor.execute(sql)
-        workdays = ['-- Select an option --'] + [row[0].strftime("%Y-%m-%d") for row in cursor.fetchall()]
+        workdays = [row[0].strftime("%Y-%m-%d") for row in cursor.fetchall()]
         cursor.close()
         pool.release(connection)
         return json.dumps(workdays)
@@ -804,7 +873,7 @@ def get_names_for_module():
         cursor = connection.cursor()
         sql = "SELECT DISTINCT(NAME) FROM LM.INV_JOBS WHERE MODULE = :module order by name asc"
         cursor.execute(sql, {'module': selected_module})
-        names = ['-- Select an option --'] + [row[0] for row in cursor.fetchall()]
+        names = [row[0] for row in cursor.fetchall()]
         cursor.close()
         pool.release(connection)
         return json.dumps(names)
