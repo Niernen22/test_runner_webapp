@@ -22,7 +22,7 @@ def create_user(username):
         """
 
         with connection.cursor() as cursor:
-            cursor.execute(sql, username=username, password=hashed_password, is_admin=0)  # Assuming is_admin is 0 for non-admin user
+            cursor.execute(sql, username=username, password=hashed_password, is_admin=0)  # is_admin is 0 for non-admin user
             connection.commit()
 
     except Exception as e:
