@@ -649,8 +649,8 @@ def add_step(test_id):
         cursor.execute("SELECT TEST_STEPS_SEQ.NEXTVAL FROM dual")
         new_id = cursor.fetchone()[0] 
 
-        sql = "INSERT INTO TEST_STEPS (ID, TEST_ID, NAME, ORDERNUMBER, STATUS, TYPE, SQL_CODE, TARGET_USER) VALUES (:1, :2, :3, :4, :5, :6, :7, :8)"
-        data = (new_id, test_id, new_step_name, new_order_number, 'ADDED', step_type, sql_code, target_user)
+        sql = "INSERT INTO TEST_STEPS (ID, TEST_ID, NAME, ORDERNUMBER, STATUS, TYPE, SQL_CODE, TARGET_USER, ACTIVITY) VALUES (:1, :2, :3, :4, :5, :6, :7, :8, :9)"
+        data = (new_id, test_id, new_step_name, new_order_number, 'ADDED', step_type, sql_code, target_user, 'ACTIVE')
 
         cursor.execute(sql, data)
         connection.commit()
@@ -684,6 +684,31 @@ def delete_step():
 
     except oracledb.Error as error:
         return f"Error deleting step: {error}"
+
+
+@app.route('/step_activity', methods=['POST'])
+@login_required
+def step_activity():
+    try:
+        id = request.form['id']
+        test_id = request.form['test_id'] 
+        connection = pool.acquire()
+        cursor = connection.cursor()
+
+        cursor.execute("SELECT ACTIVITY FROM TEST_STEPS WHERE ID = :id", {'id': id})
+        current_status = cursor.fetchone()
+
+        if current_status:
+            new_status = 'INACTIVE' if current_status[0] != 'INACTIVE' else 'ACTIVE'
+            sql = "UPDATE TEST_STEPS SET ACTIVITY = :new_status WHERE ID = :id"
+            cursor.execute(sql, {'new_status': new_status, 'id': id})
+            connection.commit()
+
+        cursor.close()
+        return redirect(url_for('edit_steps', test_id=test_id))
+
+    except oracledb.Error as error:
+        return f"Error altering step activity: {error}"
 
 
 @app.route('/get_tables_for_schema', methods=['POST'])
