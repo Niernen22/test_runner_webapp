@@ -45,26 +45,29 @@ function showSPParametersForm() {
 
 
 function getProceduresForSchema(selectedSchema) {
-    var storedObjectSelect = document.getElementById('storedobject_name');
+    const storedObjectSelect = window.storedObjectSelectInstance;
+  
+    window.storedObjectSelectInstance.clear();
+    window.storedObjectSelectInstance.clearOptions();
+
     fetch(SCRIPT_ROOT + '/get_procedures_for_schema', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ schema: selectedSchema })
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ schema: selectedSchema })
     })
-    .then(response => response.json())
-    .then(data => {
-        storedObjectSelect.innerHTML = '';
-        data.forEach(function(procedure) {
-            var option = document.createElement('option');
-            option.value = procedure;
-            option.textContent = procedure;
-            storedObjectSelect.appendChild(option);
+      .then(response => response.json())
+      .then(data => {
+        storedObjectSelect.clearOptions();
+        data.forEach(function (procedure) {
+          storedObjectSelect.addOption({ value: procedure, text: procedure });
         });
-    })
-    .catch(error => console.error('Error:', error));
-}
+        storedObjectSelect.refreshOptions(false);
+      })
+      .catch(error => console.error('Error:', error));
+  }
+  
 
 
 function getParametersForStoredProcedure(selectedStoredObjectName, selectedSchema) {
@@ -225,49 +228,41 @@ function renderParametersForPackage(parameterDetails, validDates) {
 
 
 function getPackagesForSchema(selectedSchema) {
-    var storedPackageSelect = document.getElementById('storedpackage_name');
     fetch(SCRIPT_ROOT + '/get_packages_for_schema', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ schema: selectedSchema })
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ schema: selectedSchema })
     })
-    .then(response => response.json())
-    .then(data => {
-        storedPackageSelect.innerHTML = '';
-        data.forEach(function(package) {
-            var option = document.createElement('option');
-            option.value = package;
-            option.textContent = package;
-            storedPackageSelect.appendChild(option);
+      .then(response => response.json())
+      .then(data => {
+        const select = window.packageSelectInstance;
+        select.clearOptions();
+        data.forEach(pkg => {
+          select.addOption({ value: pkg, text: pkg });
         });
-    })
-    .catch(error => console.error('Error:', error));
-}
-
-
-function getProceduresForPackage(selectedPackage, selectedSchema) {
-    var storedObjectSelect = document.getElementById('storedobject_name_package');
+        select.refreshOptions(false);
+      })
+      .catch(error => console.error('Error:', error));
+  }
+  
+  function getProceduresForPackage(selectedPackage, selectedSchema) {
     fetch(SCRIPT_ROOT + '/get_procedures_for_package', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ schema: selectedSchema, package: selectedPackage })
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ schema: selectedSchema, package: selectedPackage })
     })
-    .then(response => response.json())
-    .then(data => {
-        storedObjectSelect.innerHTML = '';
-        data.forEach(function(procedure) {
-            var option = document.createElement('option');
-            option.value = procedure;
-            option.textContent = procedure;
-            storedObjectSelect.appendChild(option);
+      .then(response => response.json())
+      .then(data => {
+        const select = window.objectInPackageSelectInstance;
+        select.clearOptions();
+        data.forEach(proc => {
+          select.addOption({ value: proc, text: proc });
         });
-    })
-    .catch(error => console.error('Error:', error));
-}
+        select.refreshOptions(false);
+      })
+      .catch(error => console.error('Error:', error));
+  }
+  
 
 
 function getTablesForTargetSchema(selectedSchema) {
@@ -281,13 +276,12 @@ function getTablesForTargetSchema(selectedSchema) {
     })
     .then(response => response.json())
     .then(data => {
-        targetTableSelect.innerHTML = '';
+        const targetTableSelect = window.targetTableSelectInstance;
+        targetTableSelect.clearOptions();
         data.forEach(function(table) {
-            var option = document.createElement('option');
-            option.value = table;
-            option.textContent = table;
-            targetTableSelect.appendChild(option);
+            targetTableSelect.addOption({ value: table, text: table });
         });
+        targetTableSelect.refreshOptions(false);
     })
     .catch(error => console.error('Error:', error));
 }
@@ -316,7 +310,6 @@ function getTablesForTruncateSchema(selectedSchema) {
 
 
 function getTablesForSourceSchema(selectedSchema) {
-    var sourceTableSelect = document.getElementById('source_table');
     fetch(SCRIPT_ROOT + '/get_tables_for_prod_schema', {
         method: 'POST',
         headers: {
@@ -326,13 +319,12 @@ function getTablesForSourceSchema(selectedSchema) {
     })
     .then(response => response.json())
     .then(data => {
-        sourceTableSelect.innerHTML = '';
+        const sourceTableSelect = window.sourceTableSelectInstance; 
+        sourceTableSelect.clearOptions();
         data.forEach(function(table) {
-            var option = document.createElement('option');
-            option.value = table;
-            option.textContent = table;
-            sourceTableSelect.appendChild(option);
+            sourceTableSelect.addOption({ value: table, text: table });
         });
+        sourceTableSelect.refreshOptions(false);
     })
     .catch(error => console.error('Error:', error));
 }
@@ -359,6 +351,16 @@ document.addEventListener('DOMContentLoaded', function() {
             defaultOption.selected = true;
             dateSelect.appendChild(defaultOption);
 
+            var currentDateOption = document.createElement('option');
+            currentDateOption.value = "CURRENT_TND";
+            currentDateOption.textContent = "Current TND";
+            dateSelect.appendChild(currentDateOption);
+
+            var maxTndOption = document.createElement('option');
+            maxTndOption.value = "MAX_TND";
+            maxTndOption.textContent = "Max TND";
+            dateSelect.appendChild(maxTndOption);
+
             data.forEach(function(day) {
                 var option = document.createElement('option');
                 option.value = day;
@@ -367,7 +369,7 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
 
-        var truncateDateSelect = document.getElementById('truncate_date');
+        /*var truncateDateSelect = document.getElementById('truncate_date');
         if (truncateDateSelect) {
             truncateDateSelect.innerHTML = '';
 
@@ -399,7 +401,7 @@ document.addEventListener('DOMContentLoaded', function() {
             truncateDateSelect.addEventListener('change', function() {
                 $('#truncate_date').datepicker('setDate', this.value || null);
             });
-        }
+        }*/
     })
     .catch(error => console.error('Error:', error));
 });
@@ -407,7 +409,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 function getNamesForModule(selectedModule) {
-    var nameSelect = document.getElementById('name');
     fetch(SCRIPT_ROOT + '/get_names_for_module', {
         method: 'POST',
         headers: {
@@ -417,16 +418,16 @@ function getNamesForModule(selectedModule) {
     })
     .then(response => response.json())
     .then(data => {
-        nameSelect.innerHTML = '';
-        data.forEach(function(name) {
-            var option = document.createElement('option');
-            option.value = name;
-            option.textContent = name;
-            nameSelect.appendChild(option);
+        const nameSelectInstance = document.getElementById('name');
+        window.nameSelectInstance.clearOptions();
+        data.forEach(name => {
+            window.nameSelectInstance.addOption({ value: name, text: name });
         });
+        window.nameSelectInstance.refreshOptions(false);
     })
     .catch(error => console.error('Error:', error));
 }
+
 
 
 function getTypesForModule(selectedModule) {
@@ -491,7 +492,7 @@ function submitFormData() {
         storedpackage_name: null,
         storedobject_name_package: null,
         parameters: [],
-        parameter_details: [] // Add this to include parameter details
+        parameter_details: []
     };
 
     if (formData.step_type === 'TABLECOPY') {
@@ -712,3 +713,102 @@ function finishEditing() {
 }
 
 document.addEventListener('DOMContentLoaded', enableDragAndDrop);
+
+document.addEventListener('DOMContentLoaded', function () {
+    new TomSelect('#module', {
+      placeholder: "-- Start typing and select an option --",
+      allowEmptyOption: true,
+      create: false,
+      onChange: function(value) {
+        getTypesForModule(value);
+        getNamesForModule(value);
+      }
+    });
+  
+    window.nameSelectInstance = new TomSelect('#name', {
+      placeholder: "-- Start typing and select an option --",
+      allowEmptyOption: true
+    });
+  
+    window.sourceSchemaSelectInstance = new TomSelect('#source_schema', {
+      placeholder: "-- Start typing and select an option --",
+      allowEmptyOption: true,
+      onChange: function(value) {
+        getTablesForSourceSchema(value);
+      }
+    });
+  
+    window.targetSchemaSelectInstance = new TomSelect('#target_schema', {
+      placeholder: "-- Start typing and select an option --",
+      allowEmptyOption: true,
+      onChange: function(value) {
+        getTablesForTargetSchema(value);
+      }
+    });
+  
+    window.sourceTableSelectInstance = new TomSelect('#source_table', {
+      placeholder: "-- Start typing and select an option --",
+      allowEmptyOption: true
+    });
+  
+    window.targetTableSelectInstance = new TomSelect('#target_table', {
+      placeholder: "-- Start typing and select an option --",
+      allowEmptyOption: true
+    });
+
+    window.procedureSchemaSelectInstance = new TomSelect('#procedures_schema', {
+        placeholder: "-- Start typing and select an option --",
+        allowEmptyOption: true,
+        onChange: function (value) {
+            getProceduresForSchema(value);
+      }
+    });
+    
+    window.storedObjectSelectInstance = new TomSelect('#storedobject_name', {
+        placeholder: "-- Start typing and select an option --",
+        allowEmptyOption: true,
+        onChange: function (value) {
+          const selectedSchema = document.getElementById('procedures_schema').value;
+          if (value && selectedSchema) {
+            getParametersForStoredProcedure(value, selectedSchema);
+          }
+        }
+      });
+    
+    window.schemaPackageSelectInstance = new TomSelect('#procedures_schema_package', {
+      placeholder: "-- Start typing and select an option --",
+      allowEmptyOption: true,
+      onChange: function (selectedSchema) {
+        if (!selectedSchema) return;
+        window.packageSelectInstance.clear(true);
+        window.objectInPackageSelectInstance.clear(true);
+        document.getElementById('parameters_package').innerHTML = '';
+        getPackagesForSchema(selectedSchema);
+      }
+    });
+    
+    window.packageSelectInstance = new TomSelect('#storedpackage_name', {
+      placeholder: "-- Start typing and select an option --",
+      allowEmptyOption: true,
+      onChange: function (selectedPackage) {
+        const selectedSchema = document.getElementById('procedures_schema_package').value;
+        if (!selectedPackage || !selectedSchema) return;
+        window.objectInPackageSelectInstance.clear(true);
+        document.getElementById('parameters_package').innerHTML = '';
+        getProceduresForPackage(selectedPackage, selectedSchema);
+      }
+    });
+    
+    window.objectInPackageSelectInstance = new TomSelect('#storedobject_name_package', {
+      placeholder: "-- Start typing and select an option --",
+      allowEmptyOption: true,
+      onChange: function (selectedProcedure) {
+        const schema = document.getElementById('procedures_schema_package').value;
+        const packageName = document.getElementById('storedpackage_name').value;
+        if (!schema || !packageName || !selectedProcedure) return;
+        getParametersForStoredProcedureInPackage(selectedProcedure, schema, packageName);
+      }
+    });
+      
+  });
+  
