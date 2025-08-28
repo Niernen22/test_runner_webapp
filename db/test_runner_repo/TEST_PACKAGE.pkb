@@ -1,4 +1,4 @@
-CREATE OR REPLACE PACKAGE BODY TEST_PACKAGE IS
+CREATE OR REPLACE PACKAGE BODY TEST_RUNNER_REPO.TEST_PACKAGE IS
 --------------------------------------------------------------------------------------------------------------------------------------------------------
   PROCEDURE SCHEDULER_JOBLOG (v_name IN VARCHAR2, v_sqlcode IN TEST_STEPS.SQL_CODE%TYPE, 
   v_targetuser in TEST_STEPS.TARGET_USER%TYPE, v_schstatus IN OUT VARCHAR2) IS
@@ -109,6 +109,12 @@ CREATE OR REPLACE PACKAGE BODY TEST_PACKAGE IS
       COMMIT;
 
       IF v_schstatus != 'SUCCEEDED' THEN
+    
+    UPDATE TESTS
+    SET STATUS = v_schstatus, START_TIME = v_start_time, END_TIME = v_end_time
+    WHERE ID = v_id;
+    COMMIT;
+      
         EXIT;
       END IF;
     END LOOP;
@@ -148,6 +154,13 @@ CREATE OR REPLACE PACKAGE BODY TEST_PACKAGE IS
     INSERT INTO TEST_RUN_LOG (RUN_ID, TEST_ID, TEST_NAME, EVENT, EVENT_TIME, ERROR_MESSAGE)
     VALUES (v_run_id, v_id, v_test_name, v_schstatus, SYSTIMESTAMP, v_error);
     COMMIT;
+    
+    EXCEPTION
+        WHEN OTHERS THEN
+             UPDATE TESTS
+            SET STATUS = 'FAILED', START_TIME = v_start_time, END_TIME = sysdate
+            WHERE ID = v_id;
+            COMMIT;
     
   END RUN_TEST;
 --------------------------------------------------------------------------------------------------------------------------------------------------------
