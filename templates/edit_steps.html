@@ -22,6 +22,7 @@
                 <th>Step Name</th>
                 <th>Type</th>
                 <th>SQL Code</th>
+                <th>Activity</th>
                 <th>Action</th>
             </tr>
         </thead>
@@ -32,17 +33,30 @@
                 <td>{{ step['NAME'] }}</td>
                 <td>{{ step['TYPE'] }}</td>
                 <td>{{ step['SQL_CODE'] }}</td>
+                <td>{{ step['ACTIVITY'] }}</td>
                 <td>
-                    <form action="{{ url_for('delete_step') }}" method="post">
+                    <form action="{{ url_for('delete_step') }}" method="post" style="display:inline;">
                         <input type="hidden" name="id" value="{{ step['ID'] }}">
                         <input type="hidden" name="test_id" value="{{ test_id }}">
                         <button type="submit">Delete</button>
+                    </form>
+                    <form action="{{ url_for('step_activity') }}" method="post" style="display:inline;">
+                        <input type="hidden" name="id" value="{{ step['ID'] }}">
+                        <input type="hidden" name="test_id" value="{{ test_id }}">
+                        <button type="submit">
+                            {% if step['ACTIVITY'] == 'INACTIVE' %}
+                                Activate
+                            {% else %}
+                                Deactivate
+                            {% endif %}
+                        </button>
                     </form>
                 </td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
+    
 
     <button type="button" onclick="openPopup()">Add Step</button>
 
