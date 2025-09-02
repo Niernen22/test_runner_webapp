@@ -209,10 +209,10 @@ def index():
         search_name = request.args.get('search_name')
 
         if search_name:
-            query = "SELECT * FROM TESTS WHERE NAME LIKE '%' || :search_name || '%' ORDER BY NAME"
+            query = "SELECT * FROM TESTS WHERE ARCHIVED != 'YES' AND NAME LIKE '%' || :search_name || '%' ORDER BY NAME"
             cursor.execute(query, {'search_name': search_name})
         else:
-            query = "SELECT * FROM TESTS ORDER BY ID DESC"
+            query = "SELECT * FROM TESTS WHERE ARCHIVED != 'YES' ORDER BY ID DESC"
             cursor.execute(query)
 
         tests = []
@@ -236,9 +236,10 @@ def add_test():
         cursor = connection.cursor()
 
         test_name = request.form['new_test_name']
+        owner = current_user.username
 
-        query = "INSERT INTO TESTS (ID, NAME) VALUES (TESTS_SEQ.NEXTVAL, :name)"
-        cursor.execute(query, {'name': test_name})
+        query = "INSERT INTO TESTS (ID, NAME, OWNER, ARCHIVED) VALUES (TESTS_SEQ.NEXTVAL, :name, :owner, 'NO')"
+        cursor.execute(query, {'name': test_name, 'owner': owner})
 
         connection.commit()
 
@@ -338,12 +339,16 @@ def test_steps(test_id):
         WHERE ts.TEST_ID = :test_id
         ORDER BY ts.ORDERNUMBER
         """
-        cursor.execute(query, test_id=test_id)
+        cursor.execute(query, {'test_id': test_id})
 
         test_steps_data = []
         column_names = [col[0] for col in cursor.description]
         for row in cursor.fetchall():
             test_steps_data.append(dict(zip(column_names, row)))
+
+        cursor.execute("SELECT OWNER FROM TESTS WHERE ID = :test_id", {'test_id': test_id})
+        owner_row = cursor.fetchone()
+        test_owner = owner_row[0] if owner_row else None
 
         tnd_query = "SELECT get_tnd FROM dual"
         cursor.execute(tnd_query)
@@ -351,11 +356,10 @@ def test_steps(test_id):
 
         cursor.close()
 
-        return render_template('test_steps.html', test_id=test_id, test_steps=test_steps_data, tnd_data=tnd_data)
+        return render_template('test_steps.html', test_id=test_id, test_steps=test_steps_data, tnd_data=tnd_data, test_owner=test_owner)
     
     except oracledb.Error as error:
         return f"Error retrieving test steps: {error}"
-
 
 
 
@@ -950,6 +954,35 @@ def run_test(test_id):
         return jsonify({'success': True, 'message': 'Test started successfully!', 'v_run_id': result['v_run_id']})
     else:
         return jsonify({'success': False, 'error': result['error']}), 500
+
+
+
+@app.route('/archive_test', methods=['POST'])
+@login_required
+def archive_test():
+    try:
+        test_id = request.form['id']
+        connection = pool.acquire()
+        cursor = connection.cursor()
+
+        cursor.execute("SELECT OWNER FROM TESTS WHERE ID = :id", {'id': test_id})
+        owner_row = cursor.fetchone()
+
+        if owner_row:
+            owner = owner_row[0]
+            if owner != current_user.username:
+                return "Error: you are not the owner of this test plan.", 403
+            
+            cursor.execute("UPDATE TESTS SET ARCHIVED = 'YES' WHERE ID = :id", {'id': test_id})
+            connection.commit()
+        else:
+            return "Error: Test not found.", 404
+
+        cursor.close()
+        return redirect(url_for('index'))
+
+    except oracledb.Error as error:
+        return f"Error archiving test: {error}"
 
 
 if __name__ == '__main__':
