@@ -52,6 +52,7 @@
             <tr>
                 <th>ID</th>
                 <th>Name</th>
+                <th>Owner</th>
                 <th>Status</th>
             </tr>
         </thead>
@@ -60,6 +61,7 @@
             <tr>
                 <td>{{ test['ID'] }}</td>
                 <td><a href="{{ url_for('test_steps', test_id=test['ID']) }}">{{ test['NAME'] }}</a></td>
+                <td>{{ test['OWNER'] }}</td>
                 <td>{{ test['STATUS'] }}</td>
             </tr>
             {% endfor %}
