@@ -22,3 +22,14 @@ document.getElementById('RunPlanButton').addEventListener('click', function(even
           alert('An unexpected error occurred: ' + error);
       });
 });
+
+
+document.getElementById('ArchiveButton').addEventListener('click', function(event) {
+    event.preventDefault();
+
+    const confirmArchive = confirm('Are you sure you want to archive this test plan?');
+
+    if (confirmArchive) {
+        document.getElementById('archiveForm').submit();
+    }
+});
