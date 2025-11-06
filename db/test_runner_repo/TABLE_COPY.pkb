@@ -32,151 +32,106 @@ CREATE OR REPLACE PACKAGE BODY TABLECOPY_PACKAGE AS
 -----------------------------------------------------------------------------------------------------------------------------------------------------------
 PROCEDURE TND_TABLESPACE_CHECK (
     p_source_schema VARCHAR2,
-    p_source_table VARCHAR2,
+    p_source_table  VARCHAR2,
     p_target_schema VARCHAR2,
-    p_target_table VARCHAR2,
-    p_tnd_filter DATE) IS
-
-   v_tnd_name VARCHAR2(20);
-   v_tablespace_name VARCHAR2(30);
+    p_target_table  VARCHAR2,
+    p_tnd_filter    DATE
+) IS
+   v_tnd_name         VARCHAR2(20);
+   v_tablespace_name  VARCHAR2(30);
    v_tablespace_count NUMBER;
-   v_datafile_path VARCHAR2(100);
-   v_datafile_size NUMBER;
-   v_autoextend_size NUMBER;
-   v_bigfile VARCHAR2(10);
-   v_datafile_paths CLOB := EMPTY_CLOB();
-   v_datafile_count NUMBER;
+   v_dbfile_count     NUMBER;
+   v_abs_path         VARCHAR2(500);
+
+   w_line             VARCHAR2(4000);
+   w_subline_base     VARCHAR2(300);
+   w_subline          VARCHAR2(4000);
 BEGIN
    v_tnd_name := 'P_' || TO_CHAR(p_tnd_filter, 'YYYYMMDD');
 
---1. TABLESPACE CHECK
-    FOR tablespacecheck IN (
-    SELECT DISTINCT TABLESPACE_NAME
-    FROM DBA_TAB_PARTITIONS@ODS_PROD
-    WHERE TABLE_OWNER = p_source_schema
-    AND TABLE_NAME = p_source_table
-    AND PARTITION_NAME = v_tnd_name)
+   BEGIN
+      SELECT TABLESPACE_NAME
+        INTO v_tablespace_name
+        FROM DBA_TAB_PARTITIONS@ODS_PROD
+       WHERE TABLE_OWNER = p_source_schema
+         AND TABLE_NAME  = p_source_table
+         AND PARTITION_NAME = v_tnd_name
+         AND ROWNUM = 1;
+   EXCEPTION
+      WHEN NO_DATA_FOUND THEN
+         logger.error('No partition ' || v_tnd_name || ' found for ' || p_source_schema || '.' || p_source_table);
+         RETURN;
+   END;
 
-    LOOP
-    v_tablespace_name := tablespacecheck.TABLESPACE_NAME;
+   BEGIN
+      SELECT param_value
+        INTO v_abs_path
+        FROM lm.params
+       WHERE param_name = 'RDW_TS_ABS_PATH';
+   EXCEPTION
+      WHEN NO_DATA_FOUND THEN
+         logger.error('Missing RDW_TS_ABS_PATH parameter');
+         RETURN;
+   END;
+
+   BEGIN
+      SELECT TO_NUMBER(param_value)
+        INTO v_dbfile_count
+        FROM lm.params
+       WHERE param_name = 'PRM_STAGE_DBFILE_COUNT';
+   EXCEPTION
+      WHEN NO_DATA_FOUND THEN
+         v_dbfile_count := 1;
+         logger.warn('Missing PRM_STAGE_DBFILE_COUNT parameter, defaulting to 1');
+   END;
 
    SELECT COUNT(*)
-   INTO v_tablespace_count
-   FROM DBA_DATA_FILES
-   WHERE TABLESPACE_NAME = v_tablespace_name;
+     INTO v_tablespace_count
+     FROM DBA_DATA_FILES
+    WHERE TABLESPACE_NAME = v_tablespace_name;
 
    IF v_tablespace_count > 0 THEN
-      DBMS_OUTPUT.PUT_LINE('Tablespace ' || v_tablespace_name || ' exists.');
+      DBMS_OUTPUT.PUT_LINE('Tablespace ' || v_tablespace_name || ' already exists.');
    ELSE
-      DBMS_OUTPUT.PUT_LINE('Tablespace ' || v_tablespace_name || ' does not exist, creating..');
+      DBMS_OUTPUT.PUT_LINE('Tablespace ' || v_tablespace_name || ' does not exist, creating...');
 
---2. BIGFILE?
-   SELECT BIGFILE
-   INTO v_bigfile
-   FROM DBA_TABLESPACES@ODS_PROD
-   WHERE TABLESPACE_NAME = v_tablespace_name;
+      w_subline := '';
+      w_subline_base := '                ''' || rtrim(v_abs_path,'/') || '/' ||
+                        lower(v_tablespace_name) ||
+                        '<num>.dbf'' SIZE 8G AUTOEXTEND ON NEXT 1G MAXSIZE UNLIMITED,' || chr(10);
 
-   IF v_bigfile = 'NO' THEN
+      FOR i IN 1..v_dbfile_count LOOP
+         w_subline := w_subline || replace(w_subline_base, '<num>', lpad(i, 2, '0'));
+      END LOOP;
 
---3. MULTIPLE DATAFILES?
-   SELECT COUNT(*)
-   INTO v_datafile_count
-   FROM dba_data_files@ODS_PROD
-   WHERE tablespace_name = v_tablespace_name;
+      w_line := 'CREATE TABLESPACE "' || v_tablespace_name || '" ' || chr(10)
+             || '       DATAFILE ' || chr(10)
+             || SUBSTR(w_subline, 1, LENGTH(w_subline)-3) || chr(10)
+             || '       LOGGING DEFAULT COMPRESS ONLINE PERMANENT ' || chr(10)
+             || '       EXTENT MANAGEMENT LOCAL AUTOALLOCATE ' || chr(10)
+             || '       SEGMENT SPACE MANAGEMENT AUTO FLASHBACK ON';
 
---4. NO BIGFILE, SINGLE DATAFILE:
-   IF v_datafile_count = 1 THEN
-
-  --4/A/1. AUTOEXTEND SIZE (%)
-  SELECT
-  (SELECT VALUE FROM SYS.V_$PARAMETER WHERE name = 'db_block_size') *
-  (SELECT INCREMENT_BY FROM DBA_DATA_FILES@ODS_PROD WHERE TABLESPACE_NAME = v_tablespace_name) / 1024 /1024
-  INTO v_autoextend_size
-  FROM dual;
-
-  --3/A/2. DATAFILE SIZE (%)
-  SELECT v_autoextend_size/4 INTO v_datafile_size
-  FROM dual;
-
-
-   --3/A/3. DATAFILE PATH
-   SELECT REPLACE(FILE_NAME, '/ODSD/', '/RDWD/')
-   INTO v_datafile_path
-   FROM DBA_DATA_FILES@ODS_PROD
-   WHERE TABLESPACE_NAME = v_tablespace_name;
-
-   EXECUTE IMMEDIATE 'CREATE TABLESPACE ' || v_tablespace_name ||
-                  ' DATAFILE ''' || v_datafile_path || ''' SIZE ' || v_datafile_size || 'M'|| ' AUTOEXTEND ON NEXT ' || v_autoextend_size || 'M';
-  DBMS_OUTPUT.PUT_LINE('Created tablespace ' || v_tablespace_name);
-
---4. NO BIGFILE, MULTIPLE DATAFILE:
-   ELSIF v_datafile_count > 1 THEN
-
-   --4/B/0. DATAFILE PATHS
-   FOR datafile_path_info IN (
-       SELECT REPLACE(FILE_NAME, '/ODSD/', '/RDWD/') AS DATAFILE_PATH_NAME,
-              (SELECT INCREMENT_BY FROM DBA_DATA_FILES@ODS_PROD WHERE FILE_NAME = datafile_path.FILE_NAME) AS INCREMENT_BY
-       FROM DBA_DATA_FILES@ODS_PROD datafile_path
-       WHERE TABLESPACE_NAME = v_tablespace_name
-   )
-   LOOP
-   --4/B/1. AUTOEXTEND SIZE
-       SELECT (SELECT VALUE FROM SYS.V_$PARAMETER WHERE name = 'db_block_size') *
-              (datafile_path_info.INCREMENT_BY) / 1024 / 1024
-       INTO v_autoextend_size
-       FROM dual;
-
-   --4/B/2. DATAFILE SIZE
-       SELECT v_autoextend_size / 4 INTO v_datafile_size FROM dual;
-   --4/B/3. DATAFILE PATHS NAMES
-       v_datafile_path := datafile_path_info.DATAFILE_PATH_NAME;
-       v_datafile_paths := v_datafile_paths || ', ''' || v_datafile_path || ''' SIZE ' || v_datafile_size || 'M AUTOEXTEND ON NEXT ' || v_autoextend_size || 'M';
-   END LOOP;
-
-   v_datafile_paths := SUBSTR(v_datafile_paths, 3);
-
-   EXECUTE IMMEDIATE 'CREATE TABLESPACE ' || v_tablespace_name ||
-                     ' DATAFILE ' || v_datafile_paths;
-
-   DBMS_OUTPUT.PUT_LINE('Created tablespace ' || v_tablespace_name || ' with datafiles ' || v_datafile_paths);
-
-
-   --4/C.
-   ELSE
-   DBMS_OUTPUT.PUT_LINE('Problem with finding datafile for ' || v_tablespace_name);
+      BEGIN
+         EXECUTE IMMEDIATE w_line;
+         DBMS_OUTPUT.PUT_LINE('Created tablespace: ' || v_tablespace_name);
+      EXCEPTION
+         WHEN OTHERS THEN
+            DBMS_OUTPUT.PUT_LINE('Tablespace creation failed.');
+            DBMS_OUTPUT.PUT_LINE('Error message: ' || SQLERRM);
+            DBMS_OUTPUT.PUT_LINE('Failed code: ' || w_line);
+            DBMS_OUTPUT.PUT_LINE('Absolute path: ' || v_abs_path);
+            DBMS_OUTPUT.PUT_LINE('Db file count: ' || v_dbfile_count);
+      END;
    END IF;
 
---5.BIGFILE TABLESPACE
-   ELSIF v_bigfile = 'YES' THEN
-
-  --5/1. AUTOEXTEND SIZE (%)
-  SELECT
-  (SELECT VALUE FROM SYS.V_$PARAMETER WHERE name = 'db_block_size') *
-  (SELECT INCREMENT_BY FROM DBA_DATA_FILES@ODS_PROD WHERE TABLESPACE_NAME = v_tablespace_name) / 1024 /1024
-  INTO v_autoextend_size
-  FROM dual;
-
-  --5/2. DATAFILE SIZE (%)
-  SELECT v_autoextend_size/4 INTO v_datafile_size
-  FROM dual;
-
-
-   --5/3. DATAFILE PATH
-   SELECT REPLACE(FILE_NAME, '/ODSD/', '/RDWD/')
-   INTO v_datafile_path
-   FROM DBA_DATA_FILES@ODS_PROD
-   WHERE TABLESPACE_NAME = v_tablespace_name;
-
-   EXECUTE IMMEDIATE 'CREATE TABLESPACE ' || v_tablespace_name ||
-                  ' DATAFILE ''' || v_datafile_path || ''' SIZE ' || v_datafile_size || 'M'|| ' AUTOEXTEND ON NEXT ' || v_autoextend_size || 'M';
-  DBMS_OUTPUT.PUT_LINE('Created tablespace ' || v_tablespace_name);
-
-  ELSE
-    DBMS_OUTPUT.PUT_LINE('No information found about ' || v_tablespace_name);
-  END IF;
- END IF;
-END LOOP;
+EXCEPTION
+   WHEN OTHERS THEN
+      logger.error('Fatal error in TND_TABLESPACE_CHECK');
+      logger.error(dbms_utility.format_error_stack);
+      RAISE;
 END TND_TABLESPACE_CHECK;
+
+
 --------------------------------------------------------------------------------------------------------------------------------------------------------------
 PROCEDURE COMMON_COLUMNS (
         p_source_schema VARCHAR2,
@@ -262,168 +217,112 @@ END COPY_COLUMNS_TND;
 --------------------------------------------------------------------------------------------------------------------------------------------------------------
 PROCEDURE TABLESPACE_CHECK (
     p_source_schema VARCHAR2,
-    p_source_table VARCHAR2,
+    p_source_table  VARCHAR2,
     p_target_schema VARCHAR2,
-    p_target_table VARCHAR2) IS
-   v_partition_name VARCHAR2(30);
-   v_tablespace_name VARCHAR2(30);
-   v_tablespace_count NUMBER;
-   v_partition_count NUMBER;
-   v_datafile_path VARCHAR2(100);
-   v_datafile_size NUMBER;
-   v_autoextend_size NUMBER;
-   v_bigfile VARCHAR2(10);
-   v_datafile_paths CLOB := EMPTY_CLOB();
-   v_datafile_count NUMBER;
+    p_target_table  VARCHAR2
+) IS
+   v_tablespace_name   VARCHAR2(30);
+   v_tablespace_count  NUMBER;
+   v_partition_count   NUMBER;
+   v_dbfile_count      NUMBER;
+   v_abs_path          VARCHAR2(500);
+
+   w_line              VARCHAR2(4000);
+   w_subline_base      VARCHAR2(300);
+   w_subline           VARCHAR2(4000);
 BEGIN
---1. TABLESPACE CHECK
-     FOR partitioncheck IN(
-    SELECT partition_name
-    FROM DBA_TAB_PARTITIONS@ODS_PROD
-    WHERE TABLE_OWNER = p_source_schema
-    AND TABLE_NAME = p_source_table)
+   BEGIN
+      SELECT param_value
+        INTO v_abs_path
+        FROM lm.params
+       WHERE param_name = 'RDW_TS_ABS_PATH';
+   EXCEPTION
+      WHEN NO_DATA_FOUND THEN
+         logger.error('Missing parameter RDW_TS_ABS_PATH in LM.PARAMS');
+         RETURN;
+   END;
 
-    LOOP
-    v_partition_name := partitioncheck.partition_name;
+   BEGIN
+      SELECT TO_NUMBER(param_value)
+        INTO v_dbfile_count
+        FROM lm.params
+       WHERE param_name = 'PRM_STAGE_DBFILE_COUNT';
+   EXCEPTION
+      WHEN NO_DATA_FOUND THEN
+         v_dbfile_count := 1;
+         logger.warn('Missing PRM_STAGE_DBFILE_COUNT parameter; defaulting to 1');
+   END;
 
-    SELECT COUNT(*)
-    INTO v_partition_count
-    FROM DBA_TAB_PARTITIONS
-    WHERE TABLE_OWNER = p_target_schema
-    AND TABLE_NAME = p_target_table
-    AND PARTITION_NAME = v_partition_name;
-
-   IF v_partition_count > 0 THEN
-      DBMS_OUTPUT.PUT_LINE('Partition ' || v_partition_name || ' exists, new tablespace is not needed.');
-   ELSE
-      DBMS_OUTPUT.PUT_LINE('Partition ' || v_partition_name || ' does not exists, checking tablespace..');
-
-    SELECT TABLESPACE_NAME
-    INTO v_tablespace_name
-    FROM DBA_TAB_PARTITIONS@ODS_PROD
-    WHERE TABLE_OWNER = p_source_schema
-    AND TABLE_NAME = p_source_table
-    AND PARTITION_NAME = v_partition_name;
-
-   SELECT COUNT(*)
-   INTO v_tablespace_count
-   FROM DBA_DATA_FILES
-   WHERE TABLESPACE_NAME = v_tablespace_name;
-
-   IF v_tablespace_count > 0 THEN
-      DBMS_OUTPUT.PUT_LINE('Tablespace ' || v_tablespace_name || ' exists.');
-   ELSE
-      DBMS_OUTPUT.PUT_LINE('Tablespace ' || v_tablespace_name || ' does not exist, creating..');
-
---2. BIGFILE?
-   SELECT BIGFILE
-   INTO v_bigfile
-   FROM DBA_TABLESPACES@ODS_PROD
-   WHERE TABLESPACE_NAME = v_tablespace_name;
-
-   IF v_bigfile = 'NO' THEN
-
---3. MULTIPLE DATAFILES?
-   SELECT COUNT(*)
-   INTO v_datafile_count
-   FROM dba_data_files@ODS_PROD
-   WHERE tablespace_name = v_tablespace_name;
-
---4. NO BIGFILE, SINGLE DATAFILE:
-   IF v_datafile_count = 1 THEN
-
-  --4/A/1. AUTOEXTEND SIZE (%)
-  SELECT
-  (SELECT VALUE FROM SYS.V_$PARAMETER WHERE name = 'db_block_size') *
-  (SELECT INCREMENT_BY FROM DBA_DATA_FILES@ODS_PROD WHERE TABLESPACE_NAME = v_tablespace_name) / 1024 /1024
-  INTO v_autoextend_size
-  FROM dual;
-
-  --3/A/2. DATAFILE SIZE (%)
-  SELECT v_autoextend_size/4 INTO v_datafile_size
-  FROM dual;
-
-
-   --3/A/3. DATAFILE PATH
-   SELECT REPLACE(FILE_NAME, '/ODSD/', '/RDWD/')
-   INTO v_datafile_path
-   FROM DBA_DATA_FILES@ODS_PROD
-   WHERE TABLESPACE_NAME = v_tablespace_name;
-
-   EXECUTE IMMEDIATE 'CREATE TABLESPACE ' || v_tablespace_name ||
-                  ' DATAFILE ''' || v_datafile_path || ''' SIZE ' || v_datafile_size || 'M'|| ' AUTOEXTEND ON NEXT ' || v_autoextend_size || 'M';
-  DBMS_OUTPUT.PUT_LINE('Created tablespace ' || v_tablespace_name);
-
---4. NO BIGFILE, MULTIPLE DATAFILE:
-   ELSIF v_datafile_count > 1 THEN
-
-   --4/B/0. DATAFILE PATHS
-   FOR datafile_path_info IN (
-       SELECT REPLACE(FILE_NAME, '/ODSD/', '/RDWD/') AS DATAFILE_PATH_NAME,
-              (SELECT INCREMENT_BY FROM DBA_DATA_FILES@ODS_PROD WHERE FILE_NAME = datafile_path.FILE_NAME) AS INCREMENT_BY
-       FROM DBA_DATA_FILES@ODS_PROD datafile_path
-       WHERE TABLESPACE_NAME = v_tablespace_name
+   FOR partition_rec IN (
+       SELECT partition_name, tablespace_name
+         FROM DBA_TAB_PARTITIONS@ODS_PROD
+        WHERE TABLE_OWNER = p_source_schema
+          AND TABLE_NAME  = p_source_table
    )
    LOOP
-   --4/B/1. AUTOEXTEND SIZE
-       SELECT (SELECT VALUE FROM SYS.V_$PARAMETER WHERE name = 'db_block_size') *
-              (datafile_path_info.INCREMENT_BY) / 1024 / 1024
-       INTO v_autoextend_size
-       FROM dual;
+      BEGIN
+         DBMS_OUTPUT.PUT_LINE('Checking partition: ' || partition_rec.partition_name);
 
-   --4/B/2. DATAFILE SIZE
-       SELECT v_autoextend_size / 4 INTO v_datafile_size FROM dual;
-   --4/B/3. DATAFILE PATHS NAMES
-       v_datafile_path := datafile_path_info.DATAFILE_PATH_NAME;
-       v_datafile_paths := v_datafile_paths || ', ''' || v_datafile_path || ''' SIZE ' || v_datafile_size || 'M AUTOEXTEND ON NEXT ' || v_autoextend_size || 'M';
+         SELECT COUNT(*)
+           INTO v_partition_count
+           FROM DBA_TAB_PARTITIONS
+          WHERE TABLE_OWNER = p_target_schema
+            AND TABLE_NAME  = p_target_table
+            AND PARTITION_NAME = partition_rec.partition_name;
+
+         IF v_partition_count > 0 THEN
+            DBMS_OUTPUT.PUT_LINE('Partition ' || partition_rec.partition_name || ' already exists in target.');
+            CONTINUE;
+         END IF;
+
+         SELECT COUNT(*)
+           INTO v_tablespace_count
+           FROM DBA_DATA_FILES
+          WHERE TABLESPACE_NAME = partition_rec.tablespace_name;
+
+         IF v_tablespace_count > 0 THEN
+            DBMS_OUTPUT.PUT_LINE('Tablespace ' || partition_rec.tablespace_name || ' exists.');
+         ELSE
+            DBMS_OUTPUT.PUT_LINE('Tablespace ' || partition_rec.tablespace_name || ' does not exist, creating...');
+
+            w_subline := '';
+            w_subline_base := '                ''' || rtrim(v_abs_path,'/') || '/' ||
+                              lower(partition_rec.tablespace_name) ||
+                              '<num>.dbf'' SIZE 8G AUTOEXTEND ON NEXT 1G MAXSIZE UNLIMITED,' || chr(10);
+
+            FOR i IN 1..v_dbfile_count LOOP
+               w_subline := w_subline || replace(w_subline_base, '<num>', lpad(i, 2, '0'));
+            END LOOP;
+
+      w_line := 'CREATE TABLESPACE "' || partition_rec.tablespace_name || '" ' || chr(10)
+             || '       DATAFILE ' || chr(10)
+             || RTRIM(RTRIM(RTRIM(w_subline, ' '), CHR(10)), ',') || chr(10)
+             || '       ' || chr(10)
+             || '       LOGGING DEFAULT COMPRESS ONLINE PERMANENT ' || chr(10)
+             || '       EXTENT MANAGEMENT LOCAL AUTOALLOCATE ' || chr(10)
+             || '       SEGMENT SPACE MANAGEMENT AUTO FLASHBACK ON';
+
+            EXECUTE IMMEDIATE w_line;
+            DBMS_OUTPUT.PUT_LINE('Created tablespace: ' || partition_rec.tablespace_name);
+         END IF;
+
+      EXCEPTION
+         WHEN OTHERS THEN
+            DBMS_OUTPUT.PUT_LINE('Tablespace creation failed.');
+            DBMS_OUTPUT.PUT_LINE('Failed code:' ||w_line);
+            DBMS_OUTPUT.PUT_LINE('Error message: ' || SQLERRM);
+            DBMS_OUTPUT.PUT_LINE('Subline: '||w_subline);
+            DBMS_OUTPUT.PUT_LINE('Absolute path: '|| v_abs_path);
+            DBMS_OUTPUT.PUT_LINE('Db file count: '|| v_dbfile_count);
+      END;
    END LOOP;
 
-   v_datafile_paths := SUBSTR(v_datafile_paths, 3);
+   DBMS_OUTPUT.PUT_LINE('Tablespace check completed for all partitions.');
 
-   EXECUTE IMMEDIATE 'CREATE TABLESPACE ' || v_tablespace_name ||
-                     ' DATAFILE ' || v_datafile_paths;
-
-   DBMS_OUTPUT.PUT_LINE('Created tablespace ' || v_tablespace_name || ' with datafiles ' || v_datafile_paths);
-
-
-   --4/ERROR.
-   ELSE
-   DBMS_OUTPUT.PUT_LINE('Problem with finding datafile for ' || v_tablespace_name);
-   END IF;
-
---5.BIGFILE TABLESPACE
-   ELSIF v_bigfile = 'YES' THEN
-
-  --5/1. AUTOEXTEND SIZE (%)
-  SELECT
-  (SELECT VALUE FROM SYS.V_$PARAMETER WHERE name = 'db_block_size') *
-  (SELECT INCREMENT_BY FROM DBA_DATA_FILES@ODS_PROD WHERE TABLESPACE_NAME = v_tablespace_name) / 1024 /1024
-  INTO v_autoextend_size
-  FROM dual;
-
-  --5/2. DATAFILE SIZE (%)
-  SELECT v_autoextend_size/4 INTO v_datafile_size
-  FROM dual;
-
-
-   --5/3. DATAFILE PATH
-   SELECT REPLACE(FILE_NAME, '/ODSD/', '/RDWD/')
-   INTO v_datafile_path
-   FROM DBA_DATA_FILES@ODS_PROD
-   WHERE TABLESPACE_NAME = v_tablespace_name;
-
-   EXECUTE IMMEDIATE 'CREATE TABLESPACE ' || v_tablespace_name ||
-                  ' DATAFILE ''' || v_datafile_path || ''' SIZE ' || v_datafile_size || 'M'|| ' AUTOEXTEND ON NEXT ' || v_autoextend_size || 'M';
-  DBMS_OUTPUT.PUT_LINE('Created tablespace ' || v_tablespace_name);
-
-  --5/ERROR.
-  ELSE
-    DBMS_OUTPUT.PUT_LINE('No information found about ' || v_tablespace_name);
-
-  END IF;
- END IF;
-END IF;
-END LOOP;
+EXCEPTION
+   WHEN OTHERS THEN
+      DBMS_OUTPUT.PUT_LINE('Error message: ' || SQLERRM);
+      RAISE;
 END TABLESPACE_CHECK;
 --------------------------------------------------------------------------------------------------------------------------------------------------------------
 PROCEDURE PARTITION_CURSOR_RANGE (
@@ -666,15 +565,36 @@ PROCEDURE RANGE_OR_LIST (
     v_partition_type2 VARCHAR2(30);
     v_column_list CLOB;
 BEGIN
+  
+    BEGIN
     SELECT PARTITIONING_TYPE
     INTO v_partition_type1
     FROM All_PART_TABLES@ODS_PROD
-    WHERE TABLE_NAME = p_source_table AND ROWNUM = 1;
-
+    WHERE TABLE_NAME = p_source_table 
+    AND OWNER = p_source_schema
+    AND ROWNUM = 1;
+        EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            v_partition_type1 := NULL;
+            DBMS_OUTPUT.PUT_LINE('Source table ' || p_source_schema || '.' || p_source_table || ' is not partitioned or not found.');
+        WHEN OTHERS THEN
+            DBMS_OUTPUT.PUT_LINE('Error checking source partition type: ' || SQLERRM);
+    END;
+    
+    BEGIN
     SELECT PARTITIONING_TYPE
     INTO v_partition_type2
     FROM All_PART_TABLES
-    WHERE TABLE_NAME = p_target_table AND ROWNUM = 1;
+    WHERE TABLE_NAME = p_target_table
+    AND OWNER = p_target_schema
+     AND ROWNUM = 1;
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            v_partition_type2 := NULL;
+            DBMS_OUTPUT.PUT_LINE('Target table ' || p_target_schema || '.' || p_target_table || ' is not partitioned or not found.');
+        WHEN OTHERS THEN
+            DBMS_OUTPUT.PUT_LINE('Error checking target partition type: ' || SQLERRM);
+    END;
 
     IF v_partition_type1 = 'RANGE' AND v_partition_type2 = 'RANGE' THEN
         DBMS_OUTPUT.PUT_LINE('Both tables are range partitioned.');
@@ -715,7 +635,7 @@ BEGIN
 
     EXCEPTION
     WHEN NO_DATA_FOUND THEN
-        DBMS_OUTPUT.PUT_LINE('Data not found.');
+        DBMS_OUTPUT.PUT_LINE('No partitioning found.');
 
 END RANGE_OR_LIST;
 ---------------------------------------------------------------------------------------------------------------------------------------------------
@@ -886,6 +806,7 @@ BEGIN
     p_target_table => p_target_table
     );
 
+    
 --------------------Ha nincs TND szűrés...
     IF p_tnd_filter IS NULL THEN
      -----------------HA nincs TND szűrés és truncatelni kell...
