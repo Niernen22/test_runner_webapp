@@ -1,4 +1,4 @@
-CREATE OR REPLACE PACKAGE BODY TABLECOPY_PACKAGE AS
+CREATE OR REPLACE PACKAGE BODY TEST_RUNNER_REPO.TABLECOPY_PACKAGE AS
    FUNCTION TABLE_EXISTS(
        p_TABLE_OWNER VARCHAR2,
        p_TABLE_NAME VARCHAR2
@@ -366,19 +366,21 @@ BEGIN
     INTO v_partition_count
     FROM DBA_TAB_PARTITIONS
     WHERE TABLE_NAME = p_target_table
-    AND PARTITION_NAME = v_PARTITION_NAME
-    AND TABLE_OWNER = p_target_schema;
+    AND TABLE_OWNER = p_target_schema
+    AND PARTITION_NAME = v_PARTITION_NAME;
 
     IF v_partition_count = 0 THEN
     SELECT DATA_TYPE
     INTO v_column_datatype
     FROM DBA_TAB_COLUMNS@ODS_PROD
     WHERE TABLE_NAME = p_source_table
+    AND OWNER = p_source_schema
     AND COLUMN_NAME IN (SELECT COLUMN_NAME
                        FROM dba_part_key_columns@ODS_PROD
-                       WHERE TABLE_NAME = p_source_table)
-    FETCH FIRST 1 ROWS ONLY;
-    DBMS_OUTPUT.PUT_LINE('Table partitioned by ' || v_column_datatype || ' datatype column');
+                       WHERE TABLE_NAME = p_source_table
+                       AND OWNER = p_source_schema)
+                       FETCH FIRST 1 ROWS ONLY;
+                       DBMS_OUTPUT.PUT_LINE('Table partitioned by ' || v_column_datatype || ' datatype column');
 
     IF v_column_datatype = 'DATE' OR v_column_datatype = 'TIMESTAMP' THEN
 
@@ -413,6 +415,7 @@ BEGIN
      INTO v_partitioned_by_tnd
      FROM dba_part_key_columns
      WHERE NAME = p_target_table
+     AND OWNER = p_target_schema
      AND COLUMN_NAME = 'TND';
 
      IF v_partitioned_by_tnd > 0 THEN
@@ -533,9 +536,11 @@ BEGIN
     INTO v_column_datatype
     FROM DBA_TAB_COLUMNS@ODS_PROD
     WHERE TABLE_NAME = p_source_table
+    AND owner = p_source_schema
     AND COLUMN_NAME IN (SELECT COLUMN_NAME
                        FROM dba_part_key_columns@ODS_PROD
-                       WHERE TABLE_NAME = p_source_table)
+                       WHERE TABLE_NAME = p_source_table
+                       AND owner = p_source_schema)
     FETCH FIRST 1 ROWS ONLY;
     DBMS_OUTPUT.PUT_LINE('Table partitioned by ' || v_column_datatype || ' datatype column');
 
@@ -656,12 +661,16 @@ BEGIN
     SELECT PARTITIONING_TYPE
     INTO v_partition_type1
     FROM All_PART_TABLES@ODS_PROD
-    WHERE TABLE_NAME = p_source_table AND ROWNUM = 1;
+    WHERE TABLE_NAME = p_source_table 
+    AND OWNER = p_source_schema
+    AND ROWNUM = 1;
 
     SELECT PARTITIONING_TYPE
     INTO v_partition_type2
     FROM All_PART_TABLES
-    WHERE TABLE_NAME = p_target_table AND ROWNUM = 1;
+    WHERE TABLE_NAME = p_target_table 
+    AND OWNER = p_target_schema
+    AND ROWNUM = 1;
 
     IF v_partition_type1 = 'RANGE' AND v_partition_type2 = 'RANGE' THEN
         DBMS_OUTPUT.PUT_LINE('Both tables are range partitioned.');
