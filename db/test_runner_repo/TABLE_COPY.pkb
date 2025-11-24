@@ -33,8 +33,6 @@ CREATE OR REPLACE PACKAGE BODY TEST_RUNNER_REPO.TABLECOPY_PACKAGE AS
 PROCEDURE TND_TABLESPACE_CHECK (
     p_source_schema VARCHAR2,
     p_source_table  VARCHAR2,
-    p_target_schema VARCHAR2,
-    p_target_table  VARCHAR2,
     p_tnd_filter    DATE
 ) IS
    v_tnd_name         VARCHAR2(20);
@@ -221,7 +219,6 @@ PROCEDURE TABLESPACE_CHECK (
     p_target_schema VARCHAR2,
     p_target_table  VARCHAR2
 ) IS
-   v_tablespace_name   VARCHAR2(30);
    v_tablespace_count  NUMBER;
    v_partition_count   NUMBER;
    v_dbfile_count      NUMBER;
@@ -568,7 +565,6 @@ PROCEDURE RANGE_OR_LIST (
     p_target_table VARCHAR2) IS
     v_partition_type1 VARCHAR2(30);
     v_partition_type2 VARCHAR2(30);
-    v_column_list CLOB;
 BEGIN
   
     BEGIN
@@ -652,7 +648,6 @@ PROCEDURE RANGE_OR_LIST_TND (
     p_target_table VARCHAR2) IS
     v_partition_type1 VARCHAR2(30);
     v_partition_type2 VARCHAR2(30);
-    v_column_list CLOB;
     v_tnd_name VARCHAR2(30);
     v_partition_count NUMBER;
     V_TABLESPACE_NAME VARCHAR2(30);
@@ -678,9 +673,7 @@ BEGIN
     TABLECOPY_PACKAGE.TND_TABLESPACE_CHECK
        (p_tnd_filter => p_tnd_filter,
         p_source_schema => p_source_schema,
-        p_source_table => p_source_table,
-        p_target_schema => p_target_schema,
-        p_target_table => p_target_table
+        p_source_table => p_source_table
         );
 
      v_tnd_name := 'P_' || TO_CHAR(p_tnd_filter, 'YYYYMMDD');
@@ -715,9 +708,7 @@ BEGIN
     TABLECOPY_PACKAGE.TND_TABLESPACE_CHECK
        (p_tnd_filter => p_tnd_filter,
         p_source_schema => p_source_schema,
-        p_source_table => p_source_table,
-        p_target_schema => p_target_schema,
-        p_target_table => p_target_table
+        p_source_table => p_source_table
         );
 
      v_tnd_name := 'P_' || TO_CHAR(p_tnd_filter, 'YYYYMMDD');
@@ -764,34 +755,14 @@ END RANGE_OR_LIST_TND;
         p_TRUNCATE BOOLEAN DEFAULT FALSE,
         p_tnd_filter DATE DEFAULT NULL
     ) AS
-        v_column_list CLOB;
         v_PARTITION_NAME VARCHAR2(30);
-        V_HIGH_VALUE VARCHAR2(4000);
-        v_xml_cursor SYS_REFCURSOR;
-        v_date_value DATE;
         v_partition_count NUMBER;
         v_source_table_exists BOOLEAN;
         v_target_table_exists BOOLEAN;
-        v_common_columns NUMBER;
-        v_high_value_t VARCHAR2(4000);
-        v_partition_name_t VARCHAR2(30);
-        v_partitioned_by_tnd NUMBER;
-        v_datafile_paths CLOB := EMPTY_CLOB();
         v_tnd_name VARCHAR2(20);
         v_tnd_partition NUMBER;
-        tnd_column NUMBER;
-        v_dblink_sql VARCHAR2(20);
-   v_partition_type1 VARCHAR2(30);
-   v_partition_type2 VARCHAR2(30);
 
         v_partition_name VARCHAR2(30);
-        v_tablespace_name VARCHAR2(30);
-        v_tablespace_count NUMBER;
-        v_datafile_path VARCHAR2(100);
-        v_datafile_size NUMBER;
-        v_autoextend_size NUMBER;
-        v_bigfile VARCHAR2(10);
-        v_datafile_count NUMBER;
         v_source_tnd_column NUMBER;
         v_target_tnd_column NUMBER;
 
