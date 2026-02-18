@@ -50,9 +50,13 @@ table {
     width: 100%;
     border-collapse: collapse;
     margin-top: 20px;
-    background-color: #292929;
+    background-color: #313131;
     border-radius: 10px;
     overflow: hidden;
+}
+
+.row-inactive td {
+    color: #969696; 
 }
 
 th, td {
@@ -60,6 +64,8 @@ th, td {
     text-align: left;
     border-bottom: 1px solid #8993af;
     font-weight: 500;
+    white-space: normal;
+    word-wrap: break-word;
 }
 
 th {
@@ -330,3 +336,66 @@ tr {
     margin: 4px;
   }
   
+
+/* Wrapper styling */
+.scheduled-jobs {
+    padding: 10px;
+    background-color: #000000;
+    border-radius: 8px;
+    max-width: 500px;
+}
+
+/* Individual job card */
+.scheduled-job {
+    display: flex;
+    justify-content: space-between; /* text left, button right */
+    align-items: center;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    background-color: #ffffff;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.scheduled-job:hover {
+    background-color: #f0f8ff;
+}
+
+/* Text */
+.scheduled-job span {
+    font-family: 'Roboto', sans-serif;
+    font-size: 14px;
+    color: #333;
+}
+
+/* Delete button */
+.scheduled-job button {
+    background-color: #a10003;
+    border: none;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.2s;
+}
+
+.scheduled-job button:hover {
+    background-color: #000000;
+}
+
+.delete-job-btn {
+    background-color: #ff4d4f;
+    border: none;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.2s;
+}
+
+.delete-job-btn:hover {
+    background-color: #ff7875;
+}
