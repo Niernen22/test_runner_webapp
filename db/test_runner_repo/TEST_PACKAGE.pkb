@@ -1,4 +1,4 @@
-create or replace PACKAGE BODY                  TEST_PACKAGE IS
+CREATE OR REPLACE PACKAGE BODY TEST_PACKAGE IS
 --------------------------------------------------------------------------------------------------------------------------------------------------------
   PROCEDURE SCHEDULER_JOBLOG (v_name IN VARCHAR2, v_sqlcode IN TEST_STEPS.SQL_CODE%TYPE, 
   v_targetuser in TEST_STEPS.TARGET_USER%TYPE, v_schstatus IN OUT VARCHAR2) IS
@@ -58,11 +58,11 @@ create or replace PACKAGE BODY                  TEST_PACKAGE IS
       v_sqlcode := steporder.SQL_CODE;
       v_targetuser := steporder.TARGET_USER;
       v_name := 'STEP' || to_char(steporder.id || TO_CHAR(SYSTIMESTAMP, 'YYYYMMDDHH24MISSFF'));
-      DBMS_OUTPUT.PUT_LINE('Updated value: ' || v_targetuser || v_name);
+      DBMS_OUTPUT.PUT_LINE('Updated value: ' || v_name);
 
       -- STEP_RUN_LOG STARTED
       INSERT INTO STEP_RUN_LOG (RUN_ID, STEP_ID, STEP_NAME, EVENT, EVENT_TIME, OUTPUT_MESSAGE, ERROR_MESSAGE, JOBNAME)
-      VALUES (v_run_id, steporder.id, steporder.name, 'STARTED', SYSTIMESTAMP, NULL, NULL, v_targetuser || v_name);
+      VALUES (v_run_id, steporder.id, steporder.name, 'STARTED', SYSTIMESTAMP, NULL, NULL, v_name);
       COMMIT;
 
       -- SCHEDULER_JOBLOG PROCEDURE CALL
@@ -107,7 +107,7 @@ create or replace PACKAGE BODY                  TEST_PACKAGE IS
 
       -- STEP_RUN_LOG FINISHED
       INSERT INTO STEP_RUN_LOG (RUN_ID, STEP_ID, STEP_NAME, EVENT, EVENT_TIME, OUTPUT_MESSAGE, ERROR_MESSAGE, JOBNAME)
-      VALUES (v_run_id, steporder.id, steporder.name, v_schstatus, SYSTIMESTAMP, v_output, v_error, v_targetuser || v_name);
+      VALUES (v_run_id, steporder.id, steporder.name, v_schstatus, SYSTIMESTAMP, v_output, v_error, v_name);
       COMMIT;
 
       IF v_schstatus != 'SUCCEEDED' THEN
@@ -166,49 +166,102 @@ create or replace PACKAGE BODY                  TEST_PACKAGE IS
 
   END RUN_TEST;
 --------------------------------------------------------------------------------------------------------------------------------------------------------
-  FUNCTION TEST_RUNNER(v_id IN TESTS.ID%TYPE) RETURN NUMBER IS
+FUNCTION TEST_RUNNER(
+    v_id IN TESTS.ID%TYPE
+) RETURN NUMBER IS
     v_status TESTS.STATUS%TYPE;
     v_run_id NUMBER;
-    v_sql VARCHAR2(4000);
-  BEGIN
+    v_sql    VARCHAR2(4000);
+BEGIN
     SELECT STATUS INTO v_status
     FROM TESTS
     WHERE ID = v_id;
 
-    IF nvl(v_status, 'Unknown') = 'RUNNING' THEN
-      RETURN NULL; -- Return NULL if the test is already running
+    IF NVL(v_status, 'Unknown') = 'RUNNING' THEN
+        RETURN NULL;
     END IF;
 
     BEGIN
-      SELECT STATUS INTO v_status
-      FROM TESTS
-      WHERE ID = v_id
-      FOR UPDATE NOWAIT;
+        SELECT STATUS INTO v_status
+        FROM TESTS
+        WHERE ID = v_id
+        FOR UPDATE NOWAIT;
     EXCEPTION
-      WHEN OTHERS THEN
-        dbms_output.put_line('Already locked.');
-        RETURN NULL;
+        WHEN OTHERS THEN
+            RETURN NULL;
     END;
 
-      SELECT run_id_seq.NEXTVAL INTO v_run_id FROM dual;
+    SELECT run_id_seq.NEXTVAL INTO v_run_id FROM dual;
 
-      UPDATE TESTS
-      SET STATUS = 'RUNNING', RUN_ID = v_run_id
-      WHERE ID = v_id;
-      COMMIT;
+    UPDATE TESTS
+    SET STATUS = 'RUNNING',
+        RUN_ID = v_run_id
+    WHERE ID = v_id;
 
-      v_sql := 'BEGIN TEST_PACKAGE.RUN_TEST(' || v_id || ', ' || v_run_id || '); END;';
+    COMMIT;
 
-      DBMS_SCHEDULER.create_job (
-      job_name        => 'run_test_scheduler_' || v_run_id,
-      job_type        => 'PLSQL_BLOCK',
-      job_action      => v_sql,
-      start_date      => SYSTIMESTAMP,
-      repeat_interval => NULL,
-      enabled         => TRUE
-      );
+    v_sql := 'BEGIN TEST_PACKAGE.RUN_TEST(' || v_id || ', ' || v_run_id || '); END;';
 
-      RETURN v_run_id;
-  END TEST_RUNNER;
+    DBMS_SCHEDULER.create_job (
+        job_name        => 'test_run_' || v_run_id,
+        job_type        => 'PLSQL_BLOCK',
+        job_action      => v_sql,
+        start_date      => SYSTIMESTAMP,
+        enabled         => TRUE,
+        auto_drop       => TRUE
+    );
+
+    RETURN v_run_id;
+END TEST_RUNNER;
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------
+PROCEDURE TEST_SCHEDULER(
+    p_test_id         IN TESTS.ID%TYPE,
+    p_start_date      IN TIMESTAMP,
+    p_repeat_interval IN VARCHAR2,
+    p_created_by      IN VARCHAR2
+)
+IS
+    v_schedule_id NUMBER;
+    v_job_name    VARCHAR2(100);
+    v_sql         VARCHAR2(4000);
+BEGIN
+    SELECT SCHEDULED_TEST_RUNS_SEQ.NEXTVAL
+    INTO v_schedule_id
+    FROM dual;
+
+    v_job_name := 'test_scheduler_' || v_schedule_id;
+
+    v_sql := 'DECLARE v_run_id NUMBER; BEGIN v_run_id := TEST_PACKAGE.TEST_RUNNER(259); END;';
+
+    DBMS_SCHEDULER.create_job (
+        job_name        => v_job_name,
+        job_type        => 'PLSQL_BLOCK',
+        job_action      => v_sql,
+        start_date      => p_start_date,
+        repeat_interval => p_repeat_interval,
+        enabled         => TRUE,
+        auto_drop       => CASE WHEN p_repeat_interval IS NULL THEN TRUE ELSE FALSE END
+    );
+
+    INSERT INTO SCHEDULED_TEST_RUNS (
+        id,
+        test_id,
+        job_name,
+        start_time,
+        repeat_interval,
+        created_by
+    )
+    VALUES (
+        v_schedule_id,
+        p_test_id,
+        v_job_name,
+        p_start_date,
+        p_repeat_interval,
+        p_created_by
+    );
+END;
+
 
 END TEST_PACKAGE;
