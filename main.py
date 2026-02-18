@@ -3,6 +3,7 @@ from threading import Thread
 import json
 import oracledb
 import config
+from datetime import datetime
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -209,7 +210,8 @@ def index():
         search_name = request.args.get('search_name')
 
         if search_name:
-            query = "SELECT * FROM TESTS WHERE ARCHIVED != 'YES' AND NAME LIKE '%' || :search_name || '%' ORDER BY NAME"
+            search_name = search_name.upper()
+            query = "SELECT * FROM TESTS WHERE ARCHIVED != 'YES' AND OWNER LIKE '%' || :search_name || '%' ORDER BY ID DESC"
             cursor.execute(query, {'search_name': search_name})
         else:
             query = "SELECT * FROM TESTS WHERE ARCHIVED != 'YES' ORDER BY ID DESC"
@@ -253,67 +255,6 @@ def add_test():
 
     except oracledb.Error as error:
         return f"Error inserting new test: {error}"
-
-
-
-@app.route('/job_details')
-@login_required
-def job_details():
-    try:
-        run_id_filter = request.args.get('run_id')
-
-        connection = pool.acquire()
-        cursor = connection.cursor()
-
-        if run_id_filter:
-            query = "SELECT * FROM TEST_RUN_LOG WHERE RUN_ID = :run_id ORDER BY EVENT_TIME DESC"
-            cursor.execute(query, {'run_id': run_id_filter})
-        else:
-            query = "SELECT * FROM TEST_RUN_LOG ORDER BY EVENT_TIME DESC"
-            cursor.execute(query)
-
-        job_details = []
-        column_names = [col[0] for col in cursor.description]
-        for row in cursor.fetchall():
-            job_details.append(dict(zip(column_names, row)))
-
-        cursor.close()
-
-        return render_template('job_details.html', job_details=job_details)
-
-    except oracledb.Error as error:
-        return f"Error connecting to Oracle DB: {error}"
-
-
-@app.route('/job_steps_details')
-@login_required
-def job_steps_details():
-    try:
-        run_id_filter = request.args.get('run_id')
-
-        connection = pool.acquire()
-        cursor = connection.cursor()
-
-        if run_id_filter:
-            query = "SELECT * FROM STEP_RUN_LOG WHERE RUN_ID = :run_id ORDER BY EVENT_TIME DESC"
-            cursor.execute(query, {'run_id': run_id_filter})
-        else:
-            query = "SELECT * FROM STEP_RUN_LOG ORDER BY EVENT_TIME DESC"
-            cursor.execute(query)
-
-        job_steps_details = []
-        column_names = [col[0] for col in cursor.description]
-        for row in cursor.fetchall():
-            job_steps_details.append(dict(zip(column_names, row)))
-
-        cursor.close()
-
-        return render_template('job_steps_details.html', job_steps_details=job_steps_details)
-
-    except oracledb.Error as error:
-        return f"Error connecting to Oracle DB: {error}"
-
-
         
 
 @app.route('/test_steps/<test_id>')
@@ -722,7 +663,7 @@ def get_tables_for_schema():
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
-        sql = "SELECT table_name FROM all_tables WHERE owner = :schema order by table_name asc"
+        sql = "SELECT table_name FROM all_tables WHERE owner = :schema"
         cursor.execute(sql, {'schema': selected_schema})
         table_names = [row[0] for row in cursor.fetchall()]
         cursor.close()
@@ -739,7 +680,7 @@ def get_tables_for_prod_schema():
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
-        sql = "SELECT table_name FROM all_tables@ods_prod WHERE owner = :schema order by table_name asc"
+        sql = "SELECT table_name FROM all_tables@ods_prod WHERE owner = :schema"
         cursor.execute(sql, {'schema': selected_schema})
         table_names = [row[0] for row in cursor.fetchall()]
         cursor.close()
@@ -927,34 +868,135 @@ def get_types_for_module():
         return json.dumps({'error': str(e)})
 
 
-def run_test_async(test_id):
+
+def run_test_now(test_id):
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
 
-        v_run_id = cursor.callfunc('TEST_PACKAGE.TEST_RUNNER', oracledb.NUMBER, [test_id])
+        v_run_id = cursor.callfunc(
+            'TEST_PACKAGE.TEST_RUNNER',
+            oracledb.NUMBER,
+            [test_id]
+        )
+
+        if v_run_id is None:
+            return {'success': False, 'error': 'Test is already running!'}
 
         connection.commit()
         cursor.close()
 
-        print(f"Test started successfully! Run ID: {v_run_id}")
-
         return {'success': True, 'v_run_id': v_run_id}
 
     except oracledb.Error as error:
-        print(f"Error running test: {error}")
         return {'success': False, 'error': str(error)}
 
 @app.route('/run_test/<test_id>', methods=['POST'])
 @login_required
 def run_test(test_id):
-    result = run_test_async(test_id)
-    
+    result = run_test_now(test_id)
     if result['success']:
         return jsonify({'success': True, 'message': 'Test started successfully!', 'v_run_id': result['v_run_id']})
     else:
         return jsonify({'success': False, 'error': result['error']}), 500
 
+def schedule_test_run(test_id, start_time=None, recurrence=None):
+    try:
+        connection = pool.acquire()
+        cursor = connection.cursor()
+
+        repeat_interval = None
+        if recurrence == "daily":
+            repeat_interval = "FREQ=DAILY"
+        elif recurrence == "weekly":
+            repeat_interval = "FREQ=WEEKLY"
+        elif recurrence == "monthly":
+            repeat_interval = "FREQ=MONTHLY"
+
+        p_start_date = None
+        if start_time:
+            p_start_date = datetime.fromisoformat(start_time)
+
+        cursor.callproc(
+            'TEST_PACKAGE.TEST_SCHEDULER',
+            [test_id, p_start_date, repeat_interval, current_user.username]
+        )
+
+        connection.commit()
+        cursor.close()
+        return {'success': True}
+
+    except oracledb.Error as error:
+        return {'success': False, 'error': str(error)}
+
+@app.route('/schedule_test/<test_id>', methods=['POST'])
+@login_required
+def schedule_test_route(test_id):
+    data = request.get_json(silent=True) or {}
+    start_time = data.get("start_time")
+    recurrence = data.get("recurrence")
+    
+    if not start_time:
+        return jsonify({'success': False, 'error': 'Start time required'}), 400
+    
+    dt = datetime.fromisoformat(start_time)
+    
+    if dt <= datetime.now():
+        return jsonify({'success': False, 'error': 'Start time must be in the future'}), 400
+
+
+    result = schedule_test_run(test_id, start_time=start_time, recurrence=recurrence)
+    if result['success']:
+        return jsonify({'success': True})
+    else:
+        return jsonify({'success': False, 'error': result['error']}), 500
+
+
+@app.route('/scheduled_jobs/<test_id>')
+@login_required
+def scheduled_jobs(test_id):
+    cursor = pool.acquire().cursor()
+    cursor.execute("""
+        SELECT job_name, start_time, repeat_interval
+        FROM SCHEDULED_TEST_RUNS
+        WHERE test_id = :test_id AND active='Y'
+        ORDER BY start_time
+    """, {'test_id': test_id})
+    rows = cursor.fetchall()
+
+    # convert tuples to dicts
+    jobs = []
+    for row in rows:
+        job_name, start_time, repeat_interval = row
+        jobs.append({
+            'job_name': job_name,
+            'start_time': start_time.strftime('%Y-%m-%d %H:%M') if start_time else None,
+            'repeat_interval': repeat_interval
+        })
+
+    return jsonify(jobs)
+
+
+@app.route('/delete_scheduled_run/<job_name>', methods=['POST'])
+@login_required
+def delete_scheduled_run(job_name):
+    try:
+        connection = pool.acquire()
+        cursor = connection.cursor()
+
+        cursor.execute("BEGIN DBMS_SCHEDULER.DROP_JOB(:job_name); END;", {'job_name': job_name})
+
+        cursor.execute("""
+            UPDATE SCHEDULED_TEST_RUNS
+            SET active = 'N'
+            WHERE job_name = :job_name
+        """, {'job_name': job_name})
+
+        connection.commit()
+        cursor.close()
+        return jsonify({'success': True})
+    except oracledb.Error as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/archive_test', methods=['POST'])
@@ -970,7 +1012,7 @@ def archive_test():
 
         if owner_row:
             owner = owner_row[0]
-            if owner != current_user.username:
+            if owner != current_user.username and not current_user.is_admin:
                 return "Error: you are not the owner of this test plan.", 403
             
             cursor.execute("UPDATE TESTS SET ARCHIVED = 'YES' WHERE ID = :id", {'id': test_id})
@@ -983,6 +1025,86 @@ def archive_test():
 
     except oracledb.Error as error:
         return f"Error archiving test: {error}"
+
+
+@app.route('/kill_job', methods=['POST'])
+@login_required
+def kill_job():
+    try:
+        data = request.get_json()
+        step_id = data.get('step_id')
+
+        if not step_id:
+            return jsonify({'message': 'Missing step ID'}), 400
+
+        connection = pool.acquire()
+        cursor = connection.cursor()
+
+        query = """
+            SELECT JOBNAME
+            FROM STEP_RUN_LOG
+            WHERE STEP_ID = :step_id
+            ORDER BY EVENT_TIME DESC
+            FETCH FIRST 1 ROWS ONLY
+        """
+        cursor.execute(query, {'step_id': step_id})
+        row = cursor.fetchone()
+
+        if not row:
+            cursor.close()
+            return jsonify({'message': f'No running job found for step {step_id}.'}), 404
+
+        job_name = row[0]
+
+        stop_query = "BEGIN DBMS_SCHEDULER.stop_job(JOB_NAME => :job_name); END;"
+        cursor.execute(stop_query, {'job_name': job_name})
+
+        connection.commit()
+        cursor.close()
+
+        return jsonify({'message': f'Job "{job_name}" stopped successfully.'})
+
+    except oracledb.Error as error:
+        return jsonify({'message': f'Error stopping job: {error}'}), 500
+
+
+@app.route('/test_steps_logs/<int:test_id>')
+@login_required
+def test_steps_logs(test_id):
+    try:
+        connection = pool.acquire()
+        cursor = connection.cursor()
+
+        query = """
+            SELECT l.RUN_ID,
+                   l.STEP_ID,
+                   s.NAME AS STEP_NAME,
+                   l.EVENT,
+                   l.EVENT_TIME,
+                   l.OUTPUT_MESSAGE,
+                   l.ERROR_MESSAGE,
+                   l.JOBNAME
+            FROM STEP_RUN_LOG l
+            JOIN TEST_STEPS s ON l.STEP_ID = s.ID
+            WHERE s.TEST_ID = :test_id
+            ORDER BY l.EVENT_TIME DESC
+        """
+        cursor.execute(query, {'test_id': test_id})
+
+        logs = []
+        columns = [col[0] for col in cursor.description]
+        for row in cursor.fetchall():
+            logs.append(dict(zip(columns, row)))
+
+        cursor.close()
+        connection.close()
+
+        return render_template('test_steps_logs.html', test_id=test_id, logs=logs)
+
+    except oracledb.Error as error:
+        return f"Error loading logs: {error}"
+
+
 
 
 if __name__ == '__main__':
