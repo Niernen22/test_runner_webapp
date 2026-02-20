@@ -13,7 +13,7 @@ CREATE OR REPLACE PACKAGE TEST_PACKAGE IS
 
   -- Schedules a test (one-time or recurring)
   PROCEDURE TEST_SCHEDULER(
-      p_test_id        IN TESTS.ID%TYPE,
+      v_id        IN TESTS.ID%TYPE,
       p_start_date     IN TIMESTAMP,
       p_repeat_interval IN VARCHAR2,
       p_created_by     IN VARCHAR2
