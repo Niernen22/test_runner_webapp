@@ -5,7 +5,7 @@ CREATE OR REPLACE PACKAGE TEST_PACKAGE IS
       v_id IN TESTS.ID%TYPE
   ) RETURN NUMBER;
 
-  -- Internal execution logic (called by scheduler job)
+  -- Internal execution logic (called by scheduler and immediate jobs too)
   PROCEDURE RUN_TEST(
       v_id     IN TESTS.ID%TYPE,
       v_run_id IN NUMBER
