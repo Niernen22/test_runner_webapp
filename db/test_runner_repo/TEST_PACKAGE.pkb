@@ -217,7 +217,7 @@ END TEST_RUNNER;
 
 --------------------------------------------------------------------------------------------------------------------------------------------------------
 PROCEDURE TEST_SCHEDULER(
-    p_test_id         IN TESTS.ID%TYPE,
+    v_id         IN TESTS.ID%TYPE,
     p_start_date      IN TIMESTAMP,
     p_repeat_interval IN VARCHAR2,
     p_created_by      IN VARCHAR2
@@ -233,7 +233,7 @@ BEGIN
 
     v_job_name := 'test_scheduler_' || v_schedule_id;
 
-    v_sql := 'DECLARE v_run_id NUMBER; BEGIN v_run_id := TEST_PACKAGE.TEST_RUNNER(259); END;';
+    v_sql := 'DECLARE v_run_id NUMBER; BEGIN v_run_id := TEST_PACKAGE.TEST_RUNNER(' || v_id || '); END;';
 
     DBMS_SCHEDULER.create_job (
         job_name        => v_job_name,
@@ -255,7 +255,7 @@ BEGIN
     )
     VALUES (
         v_schedule_id,
-        p_test_id,
+        v_id,
         v_job_name,
         p_start_date,
         p_repeat_interval,
