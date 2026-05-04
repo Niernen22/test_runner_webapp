@@ -28,7 +28,7 @@
         </thead>
         <tbody>
             {% for step in test_steps %}
-            <tr>
+            <tr class="{% if step['ACTIVITY'] == 'INACTIVE' %}row-inactive{% endif %}">
                 <td>{{ step['ORDERNUMBER'] }}</td>
                 <td>{{ step['NAME'] }}</td>
                 <td>{{ step['TYPE'] }}</td>
