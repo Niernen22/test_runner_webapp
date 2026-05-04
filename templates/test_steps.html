@@ -9,18 +9,23 @@
 <body>
     <h1>Test Steps for Test ID: {{ test_id }}</h1>
     <a href="{{ url_for('index') }}"><button>Main Page</button></a>
-    <a href="{{ url_for('job_details') }}"><button>Job Log Details</button></a>
-    <a href="{{ url_for('job_steps_details') }}"><button>Job Steps Log Details</button></a>
-    {% if current_user.username == test_owner %}
+    {% if current_user.username == test_owner or current_user.is_admin == 1 %}
     <form id="archiveForm" action="{{ url_for('archive_test') }}" method="POST" style="display:inline;">
         <input type="hidden" name="id" value="{{ test_id }}">
         <button type="button" id="ArchiveButton">Archive Test Plan</button>
     </form>
     {% endif %}
+    <a href="{{ url_for('test_steps_logs', test_id=test_id) }}"><button>View Logs</button></a>
     <a href="{{ url_for('edit_steps', test_id=test_id )}}"><button>Edit Test Steps</button></a>
-    <form action="{{ url_for('run_test', test_id=test_id )}}" method="POST">
+    
+    <br><button id="SchedulePlanButton">Schedule Test Run</button>
+
+    <form action="{{ url_for('run_test', test_id=test_id )}}" method="POST" style="display: inline;">
         <button id="RunPlanButton">Run Test Plan</button>
     </form>
+
+    <p>Future Scheduled RUNS:</p> 
+    <div id="scheduled-jobs-list" class="scheduled-jobs"></div>
     <p>Actual TND: {{ tnd_data }}</p> 
     <table border="1">
         <thead>
@@ -37,11 +42,12 @@
                 <th>Activity</th>
                 <th>Latest Run ID</th>
                 <th>Latest Output</th>
+                <th>Actions</th>
             </tr>
         </thead>
         <tbody>
             {% for step in test_steps %}
-                <tr>
+                <tr class="{% if step['ACTIVITY'] == 'INACTIVE' %}row-inactive{% endif %}">
                     <td>{{ step['ORDERNUMBER'] }}</td>
                     <td>{{ step['NAME'] }}</td>
                     <td>{{ step['ID'] }}</td>
@@ -54,11 +60,37 @@
                     <td>{{ step['ACTIVITY'] }}</td>
                     <td>{{ step['LATEST_RUN_ID'] }}</td>
                     <td>{{ step['LATEST_OUTPUT'] }}</td>
+                    <td>
+                        <button class="kill-job-btn" data-step-id="{{ step['ID'] }}">
+                            KILL
+                        </button>
+                    </td>
                 </tr>
             {% endfor %}
         </tbody>
     </table>
 
+    <div id="scheduleModal" class="modal" style="display:none;">
+        <div class="modal-content">
+          <h3>Schedule Test Plan</h3>
+          <label for="scheduleDatetime">Start Time:</label>
+          <input type="datetime-local" id="scheduleDatetime" required>
+      
+          <label for="recurrence">Recurrence:</label>
+          <select id="recurrence">
+            <option value="none">One-time</option>
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+      
+          <div style="margin-top:10px;">
+            <button id="scheduleConfirm">OK</button>
+            <button id="scheduleCancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+      
     <script>
         const SCRIPT_ROOT = {{ request.script_root|tojson }}
    </script>  
