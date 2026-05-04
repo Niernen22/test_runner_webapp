@@ -539,6 +539,7 @@ function submitFormData() {
                 formData.parameters = parameterDetails.map(parameter => {
                     let paramName = parameter.argument_name;
                     let paramType = parameter.in_out;
+                    let paramDataType = parameter.data_type;
 
                     let paramInput = document.querySelector(`input[name="${paramName}"]`);
                     let paramValue = paramInput ? paramInput.value.trim() : null;
@@ -546,7 +547,8 @@ function submitFormData() {
                     return {
                         name: paramName,
                         type: paramType,
-                        value: paramValue
+                        value: paramValue,
+                        data_type: paramDataType
                     };
                 });
 
