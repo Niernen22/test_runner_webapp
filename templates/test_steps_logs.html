@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logs for Test {{ test_id }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/mainstyles.css') }}">
+</head>
+<body>
+    <h1>Logs for Test ID: {{ test_id }}</h1>
+    <a href="{{ url_for('index') }}"><button>Main Page</button></a>
+    <a href="{{ url_for('test_steps', test_id=test_id) }}"><button>Back to Test Steps</button></a>
+
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Run ID</th>
+                <th>Step ID</th>
+                <th>Step Name</th>
+                <th>Event</th>
+                <th>Event Time</th>
+                <th>Output Message</th>
+                <th>Error Message</th>
+                <th>Job Name</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in logs %}
+            <tr>
+                <td>{{ log['RUN_ID'] }}</td>
+                <td>{{ log['STEP_ID'] }}</td>
+                <td>{{ log['STEP_NAME'] }}</td>
+                <td>{{ log['EVENT'] }}</td>
+                <td>{{ log['EVENT_TIME'] }}</td>
+                <td>{{ log['OUTPUT_MESSAGE'] }}</td>
+                <td>{{ log['ERROR_MESSAGE'] }}</td>
+                <td>{{ log['JOBNAME'] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>
