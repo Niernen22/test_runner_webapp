@@ -1,9 +1,7 @@
----OUTDATED---
 About this Project:
-This is a webapplication in the process, the goal is to let developers make their own test plans and run them independently from system administrators.
+This webapplication's goal is to allow users to copy tables from the production database and create+run test plans in the test database. The application generates the codes, only from the allowed types and data.
 Made for oracle databases.
 
-At the moment the following is available:
 - Login required for viewing every page
   - Add User: create and delete users (alternatively, there's script for both of these functions to run in the terminal independently without login: create_user.py, delete_user.py)
   - Users: Listing all users, showing admin prviliges
@@ -22,11 +20,10 @@ At the moment the following is available:
         Button Generate SQL e.g.: BEGIN SARTASNADI.TABLE_EXISTS(SARTASNADI, FORRAS_TABLA, SARTASNADI, CEL_TABLA); END;
       - Package: Select Schema, Stored Package Name, Stored Package's Function or Procedure Name, INPUT parameters into the generated textboxes
         Button Generate SQL e.g.: BEGIN TEST_RUNNER_REPO.TABLECOPY_PACKAGE.TABLE_EXISTS(SARTASNADI, FORRAS_TABLA); END;
-    - Truncate Table: Select Truncate Schema, Truncate Table, Date;
+    - (commented out at the moment) Truncate Table: Select Truncate Schema, Truncate Table, Date;
       Button Generate SQL e.g.: BEGIN TEST_RUNNER_REPO.TRUNCATE_TND_TABLE(A10LASZLO, TEST_TABLE, TO_DATE('2024-12-02','yyyy-mm-dd')); END;
   Button Submit: Adds the Job Type and SQL Code to the editing page
-- Job Log Details: Job logging (Run ID, Test ID, Test Name, Event, Event Time, Error Message)
-- Job Steps Log Details: Job Steps Logging (Run ID, Step ID, Step Name, Event, Event Time, Output Message, Error Message, Job Name)
+- Logs: The logs of the steps belonging to the test (Run ID, Step ID, Step Name, Event, Event Time, Output Message, Error Message, Job Name)
 
 App design:
 ![login](https://github.com/user-attachments/assets/3aaab1d8-2008-493a-95d8-759e03529f13)
@@ -64,21 +61,244 @@ p_CEL_TABLA VARCHAR2 -- target table name
 
 p_TRUNCATE BOOLEAN DEFAULT FALSE -- truncate target table TRUE/FALSE
 
-p_TND_SZURES DATE DEFAULT NULL -- TND filter
+p_TND_SZURES DATE DEFAULT NULL -- TND filter (Choosen date / Max date from source table / Current date of test database)
 
 
-Runs and logs (output and error messages) a test's steps based on the test's ID (given as parameter).
+tables: 
+-- Create table
+create table TESTS
+(
+  id         NUMBER(22) not null,
+  name       VARCHAR2(200 CHAR),
+  status     VARCHAR2(10 CHAR),
+  start_time TIMESTAMP(6),
+  end_time   TIMESTAMP(6),
+  run_id     NUMBER,
+  archived   VARCHAR2(8),
+  owner      VARCHAR2(20)
+)
+tablespace TEST_RUNNER_REPO
+  pctfree 10
+  initrans 1
+  maxtrans 255
+  storage
+  (
+    initial 80K
+    next 1M
+    minextents 1
+    maxextents unlimited
+  );
+-- Create/Recreate primary, unique and foreign key constraints 
+alter table TESTS
+  add primary key (ID)
+  using index
+  tablespace TEST_RUNNER_REPO
+  pctfree 10
+  initrans 2
+  maxtrans 255
+  storage
+  (
+    initial 64K
+    next 1M
+    minextents 1
+    maxextents unlimited
+  );
 
-tables: TESTS -- TEST_RUN_LOG TEST_STEPS -- STEP_RUN_LOG
+-- Create table
+create table TEST_STEPS
+(
+  id          NUMBER(22) not null,
+  test_id     NUMBER(22),
+  name        VARCHAR2(200 CHAR) not null,
+  ordernumber NUMBER(22) not null,
+  status      VARCHAR2(10 CHAR) not null,
+  start_time  TIMESTAMP(6),
+  end_time    TIMESTAMP(6),
+  type        VARCHAR2(16 CHAR),
+  sql_code    CLOB not null,
+  target_user VARCHAR2(255),
+  activity    VARCHAR2(20)
+)
+tablespace TEST_RUNNER_REPO
+  pctfree 10
+  initrans 1
+  maxtrans 255
+  storage
+  (
+    initial 80K
+    next 1M
+    minextents 1
+    maxextents unlimited
+  );
+-- Create/Recreate indexes 
+create index IND_TEST_STEPS on TEST_STEPS (TEST_ID)
+  tablespace TEST_RUNNER_REPO
+  pctfree 10
+  initrans 2
+  maxtrans 255
+  storage
+  (
+    initial 80K
+    next 1M
+    minextents 1
+    maxextents unlimited
+  );
+-- Create/Recreate primary, unique and foreign key constraints 
+alter table TEST_STEPS
+  add primary key (ID)
+  using index
+  tablespace TEST_RUNNER_REPO
+  pctfree 10
+  initrans 2
+  maxtrans 255
+  storage
+  (
+    initial 80K
+    next 1M
+    minextents 1
+    maxextents unlimited
+  );
 
-how to call it in oracle db: DECLARE l_run_id NUMBER; BEGIN l_run_id := TEST_PACKAGE.TEST_RUNNER(234); -- Pass the desired v_id as an argument DBMS_OUTPUT.PUT_LINE('Run ID: ' || l_run_id); END; /
+-- Create table
+create table TEST_RUN_LOG
+(
+  run_id        NUMBER,
+  test_id       NUMBER,
+  test_name     VARCHAR2(200),
+  event         VARCHAR2(20),
+  event_time    DATE,
+  error_message CLOB
+)
+tablespace TEST_RUNNER_REPO
+  pctfree 10
+  initrans 1
+  maxtrans 255
+  storage
+  (
+    initial 80K
+    next 1M
+    minextents 1
+    maxextents unlimited
+  );
+
+-- Create table
+create table STEP_RUN_LOG
+(
+  run_id         NUMBER(22),
+  step_id        NUMBER(22),
+  step_name      VARCHAR2(200 CHAR),
+  event          VARCHAR2(20),
+  event_time     TIMESTAMP(6),
+  output_message CLOB,
+  error_message  CLOB,
+  jobname        VARCHAR2(400 CHAR)
+)
+tablespace TEST_RUNNER_REPO
+  pctfree 10
+  initrans 1
+  maxtrans 255
+  storage
+  (
+    initial 80K
+    next 1M
+    minextents 1
+    maxextents unlimited
+  );
+
+-- Create table
+create table SCHEDULED_TEST_RUNS
+(
+  id              NUMBER(22) not null,
+  test_id         NUMBER(22) not null,
+  job_name        VARCHAR2(100),
+  start_time      TIMESTAMP(6),
+  repeat_interval VARCHAR2(200),
+  created_at      TIMESTAMP(6) default SYSTIMESTAMP,
+  created_by      VARCHAR2(20),
+  active          VARCHAR2(1) default 'Y'
+)
+tablespace TEST_RUNNER_REPO
+  pctfree 10
+  initrans 1
+  maxtrans 255
+  storage
+  (
+    initial 80K
+    next 1M
+    minextents 1
+    maxextents unlimited
+  );
+-- Create/Recreate primary, unique and foreign key constraints 
+alter table SCHEDULED_TEST_RUNS
+  add primary key (ID)
+  using index
+  tablespace TEST_RUNNER_REPO
+  pctfree 10
+  initrans 2
+  maxtrans 255
+  storage
+  (
+    initial 80K
+    next 1M
+    minextents 1
+    maxextents unlimited
+  );
+
+-- Create table
+create table USERS
+(
+  id       NUMBER generated by default as identity (start with 27),
+  username VARCHAR2(50) not null,
+  password VARCHAR2(255) not null,
+  is_admin NUMBER(1) default 0
+)
+tablespace TEST_RUNNER_REPO
+  pctfree 10
+  initrans 1
+  maxtrans 255
+  storage
+  (
+    initial 80K
+    next 1M
+    minextents 1
+    maxextents unlimited
+  );
+-- Create/Recreate primary, unique and foreign key constraints 
+alter table USERS
+  add primary key (ID)
+  using index
+  tablespace TEST_RUNNER_REPO
+  pctfree 10
+  initrans 2
+  maxtrans 255
+  storage
+  (
+    initial 80K
+    next 1M
+    minextents 1
+    maxextents unlimited
+  );
+alter table USERS
+  add unique (USERNAME)
+  using index
+  tablespace TEST_RUNNER_REPO
+  pctfree 10
+  initrans 2
+  maxtrans 255
+  storage
+  (
+    initial 80K
+    next 1M
+    minextents 1
+    maxextents unlimited
+  );
 
 
 
 How to use this Project:
 From your terminal, download the files using
 
-$ git clone https://github.com/Niernen22/Job_steps_webapp.git
+$ git clone https://github.com/Niernen22/test_runner_webapp.git
 
 Install all dependencies from the requirements.txt file.
 
