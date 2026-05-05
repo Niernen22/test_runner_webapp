@@ -304,7 +304,11 @@ Install all dependencies from the requirements.txt file.
 
 $ pip install -r requirements.txt
 
-Open the config.py to add your credentials (Oracle database username, password, dns).
+Overwrite/Add config.py to add your credentials for the test database (Oracle database username, password, dns) in this format:
+username = 'test_runner_username'
+password = 'password'
+dsn='dsn'
+secret_key='secret_key'
 
 Run the main.py file
 
