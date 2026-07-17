@@ -117,7 +117,8 @@ create table TEST_STEPS
   type        VARCHAR2(16 CHAR),
   sql_code    CLOB not null,
   target_user VARCHAR2(255),
-  activity    VARCHAR2(20)
+  activity    VARCHAR2(20),
+  step_params CLOB
 )
 tablespace TEST_RUNNER_REPO
   pctfree 10
