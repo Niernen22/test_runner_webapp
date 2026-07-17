@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, render_template, request, redirect, url_for, jsonify, abort
 from threading import Thread
 import json
 import oracledb
@@ -44,6 +44,58 @@ def load_user(user_id):
     pool.release(connection)
     return user
 
+@app.route('/admin')
+@login_required
+def admin():
+    if not current_user.is_admin:
+        abort(403)
+    try:
+        page = max(1, request.args.get('page', 1, type=int))
+        per_page = 50
+        offset = (page - 1) * per_page
+
+        connection = pool.acquire()
+        cursor = connection.cursor()
+
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM STEP_RUN_LOG srl
+            JOIN TEST_STEPS ts ON srl.STEP_ID = ts.ID
+            WHERE srl.EVENT NOT IN ('STARTED', 'SUCCEEDED')
+        """)
+        total = cursor.fetchone()[0]
+        total_pages = max(1, -(-total // per_page))
+
+        cursor.execute("""
+            SELECT srl.RUN_ID,
+                   t.ID     AS TEST_ID,
+                   t.NAME   AS TEST_NAME,
+                   t.OWNER  AS TEST_OWNER,
+                   srl.STEP_ID,
+                   srl.STEP_NAME,
+                   srl.EVENT,
+                   srl.EVENT_TIME,
+                   srl.STEP_SQL,
+                   srl.ERROR_MESSAGE,
+                   srl.OUTPUT_MESSAGE
+            FROM STEP_RUN_LOG srl
+            JOIN TEST_STEPS ts ON srl.STEP_ID = ts.ID
+            JOIN TESTS t ON ts.TEST_ID = t.ID
+            WHERE srl.EVENT NOT IN ('STARTED', 'SUCCEEDED')
+            ORDER BY srl.EVENT_TIME DESC
+            OFFSET :offset ROWS FETCH NEXT :per_page ROWS ONLY
+        """, {'offset': offset, 'per_page': per_page})
+
+        columns = [col[0] for col in cursor.description]
+        failed_logs = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        cursor.close()
+        pool.release(connection)
+        return render_template('admin.html', failed_logs=failed_logs,
+                               page=page, total_pages=total_pages, total=total)
+    except oracledb.Error:
+        app.logger.error("Failed to load admin page", exc_info=True)
+        abort(500)
+
 @app.route('/manage_users')
 @login_required
 def manage_users():
@@ -74,7 +126,7 @@ def login():
             user = User(row[0], row[1], row[2], bool(row[3]))
             login_user(user)
             return redirect(url_for('index'))
-        return 'Invalid credentials'
+        return render_template('login.html', error='Invalid credentials'), 401
     return render_template('login.html')
 
 @app.route('/logout', methods=['POST'])
@@ -87,7 +139,7 @@ def logout():
 @login_required
 def add_user():
     if not current_user.is_admin:
-        return "Access denied", 403
+        abort(403)
 
     if request.method == 'POST':
         username = request.form['username']
@@ -110,7 +162,7 @@ def add_user():
 @login_required
 def delete_user(user_id):
     if not current_user.is_admin:
-        return "Access denied", 403
+        abort(403)
 
     connection = pool.acquire()
     cursor = connection.cursor()
@@ -126,7 +178,7 @@ def delete_user(user_id):
 @login_required
 def admin_change_password(user_id):
     if not current_user.is_admin:
-        return "Access denied", 403
+        abort(403)
 
     connection = pool.acquire()
     cursor = connection.cursor()
@@ -156,7 +208,7 @@ def admin_change_password(user_id):
     pool.release(connection)
 
     if not user:
-        return "User not found", 404
+        abort(404)
 
     return render_template('admin_change_password.html', user=user)
 
@@ -191,44 +243,67 @@ def change_password():
     else:
         cursor.close()
         pool.release(connection)
-        return 'Invalid current password', 400
+        return render_template('account.html', error='Invalid current password'), 400
 
 
+
+
+
+@app.errorhandler(403)
+def forbidden(e):
+    return render_template('error.html', code=403, title='Forbidden', message='You do not have permission to access this page.'), 403
 
 @app.errorhandler(404)
-def page_not_found(error):
-    return "Page not found", 404
+def not_found(e):
+    return render_template('error.html', code=404, title='Not Found', message='The page you are looking for does not exist.'), 404
+
+@app.errorhandler(500)
+def internal_error(e):
+    return render_template('error.html', code=500, title='Server Error', message='Something went wrong on our end. Please try again later.'), 500
 
 
 @app.route('/')
 @login_required
 def index():
     try:
+        page = max(1, request.args.get('page', 1, type=int))
+        per_page = 50
+        offset = (page - 1) * per_page
+        search_name = request.args.get('search_name')
+
         connection = pool.acquire()
         cursor = connection.cursor()
 
-        search_name = request.args.get('search_name')
-
         if search_name:
             search_name = search_name.upper()
-            query = "SELECT * FROM TESTS WHERE ARCHIVED != 'YES' AND OWNER LIKE '%' || :search_name || '%' ORDER BY ID DESC"
-            cursor.execute(query, {'search_name': search_name})
+            where = "WHERE ARCHIVED != 'YES' AND OWNER LIKE '%' || :search_name || '%'"
+            params = {'search_name': search_name}
         else:
-            query = "SELECT * FROM TESTS WHERE ARCHIVED != 'YES' ORDER BY ID DESC"
-            cursor.execute(query)
+            where = "WHERE ARCHIVED != 'YES'"
+            params = {}
 
-        tests = []
+        cursor.execute(f"SELECT COUNT(*) FROM TESTS {where}", params)
+        total = cursor.fetchone()[0]
+        total_pages = max(1, -(-total // per_page))
+
+        cursor.execute(
+            f"SELECT * FROM TESTS {where} ORDER BY ID DESC OFFSET :offset ROWS FETCH NEXT :per_page ROWS ONLY",
+            {**params, 'offset': offset, 'per_page': per_page}
+        )
+
         column_names = [col[0] for col in cursor.description]
-        for row in cursor.fetchall():
-            tests.append(dict(zip(column_names, row)))
+        tests = [dict(zip(column_names, row)) for row in cursor.fetchall()]
 
         cursor.close()
         connection.close()
 
-        return render_template('index.html', tests=tests)
+        return render_template('index.html', tests=tests, page=page,
+                               total_pages=total_pages, total=total,
+                               search_name=search_name or '')
 
     except oracledb.Error as error:
-        return f"Error connecting to Oracle DB: {error}"
+        app.logger.error("Failed to load test list", exc_info=True)
+        return "A database error occurred.", 500
 
 @app.route('/add_test', methods=['POST'])
 @login_required
@@ -254,7 +329,8 @@ def add_test():
         return redirect(url_for('edit_steps', test_id=new_id))
 
     except oracledb.Error as error:
-        return f"Error inserting new test: {error}"
+        app.logger.error("Failed to insert new test", exc_info=True)
+        return "A database error occurred.", 500
         
 
 @app.route('/test_steps/<test_id>')
@@ -298,9 +374,10 @@ def test_steps(test_id):
         cursor.close()
 
         return render_template('test_steps.html', test_id=test_id, test_steps=test_steps_data, tnd_data=tnd_data, test_owner=test_owner)
-    
+
     except oracledb.Error as error:
-        return f"Error retrieving test steps: {error}"
+        app.logger.error("Failed to load test steps view", exc_info=True)
+        return "A database error occurred.", 500
 
 
 
@@ -319,11 +396,11 @@ def edit_steps(test_id):
         for row in cursor.fetchall():
             test_steps_data.append(dict(zip(column_names, row)))
 
-        sql = "SELECT USERNAME FROM DBA_USERS ORDER BY USERNAME ASC"
+        sql = "SELECT USERNAME FROM DBA_USERS WHERE USERNAME != 'LM' ORDER BY USERNAME ASC"
         cursor.execute(sql)
         usernames = [row[0] for row in cursor.fetchall()]
 
-        sql = "SELECT USERNAME FROM DBA_USERS@ODS_PROD ORDER BY USERNAME ASC"
+        sql = "SELECT USERNAME FROM DBA_USERS@ODS_PROD WHERE USERNAME != 'LM' ORDER BY USERNAME ASC"
         cursor.execute(sql)
         prod_usernames = [row[0] for row in cursor.fetchall()]
 
@@ -348,7 +425,8 @@ def edit_steps(test_id):
         return render_template('edit_steps.html', test_id=test_id, test_steps=test_steps_data, prod_usernames=prod_usernames, usernames=usernames, modules=modules, storedobject_names=storedobject_names, procedures_schemas=procedures_schemas, storedpackage_names=storedpackage_names)
 
     except oracledb.Error as error:
-        return f"Error retrieving test steps: {error}"
+        app.logger.error("Failed to load edit steps view", exc_info=True)
+        return "A database error occurred.", 500
 
 
 @app.route('/update_order', methods=['POST'])
@@ -369,246 +447,358 @@ def update_order():
         return jsonify({"success": True}), 200
 
     except Exception as e:
-        print(e)
-        return jsonify({"success": False}), 500
+        app.logger.error("Failed to update step order", exc_info=True)
+        return jsonify({"success": False, "error": "A database error occurred."}), 500
 
     finally:
         cursor.close()
         connection.close()
 
 
+def _default_if_none(value, default=''):
+    return value if value is not None else default
+
+def _format_parameter(value, data_type):
+    if value is None:
+        return "NULL"
+    data_type = data_type.upper()
+    if data_type in ("VARCHAR2(100)", "CHAR", "CLOB", "LONG"):
+        return f"'{value.replace(chr(39), chr(39)*2)}'"
+    if data_type in ("NUMBER", "INTEGER", "FLOAT", "BINARY_DOUBLE", "BINARY_FLOAT", "BINARY_INTEGER", "PL/SQL BOOLEAN"):
+        return str(value)
+    if data_type == "DATE":
+        return f"TO_DATE('{value}', 'YYYY-MM-DD')"
+    if data_type == "TIMESTAMP":
+        return f"TO_TIMESTAMP('{value}', 'YYYY-MM-DD HH24:MI:SS')"
+    raise ValueError(f"Unsupported data type: {data_type}")
+
+def _fix_data_type(data_type):
+    if data_type.upper().startswith('VARCHAR2'):
+        return 'VARCHAR2(100)'
+    return data_type
+
+
+def _build_tablecopy_sql(data):
+    source_schema = _default_if_none(data.get('source_schema'))
+    source_table  = _default_if_none(data.get('source_table'))
+    target_schema = _default_if_none(data.get('target_schema'))
+    target_table  = _default_if_none(data.get('target_table'))
+    truncate      = _default_if_none(data.get('truncate'))
+    chosen_date   = _default_if_none(data.get('date'))
+
+    if chosen_date == "CURRENT_TND":
+        sql_code = f"""
+        BEGIN
+            TABLECOPY_PACKAGE.TABLECOPY_CURRENT(
+                p_source_schema => '{source_schema}',
+                p_source_table  => '{source_table}',
+                p_target_schema => '{target_schema}',
+                p_target_table  => '{target_table}',
+                p_truncate      => {truncate}
+            );
+        END;
+        """
+    elif chosen_date == "MAX_TND":
+        sql_code = f"""
+        BEGIN
+            TABLECOPY_PACKAGE.TABLECOPY_MAX(
+                p_source_schema => '{source_schema}',
+                p_source_table  => '{source_table}',
+                p_target_schema => '{target_schema}',
+                p_target_table  => '{target_table}',
+                p_truncate      => {truncate}
+            );
+        END;
+        """
+    elif not chosen_date:
+        sql_code = f"""
+        BEGIN
+            TABLECOPY_PACKAGE.TABLECOPY(
+                p_source_schema => '{source_schema}',
+                p_source_table  => '{source_table}',
+                p_target_schema => '{target_schema}',
+                p_target_table  => '{target_table}',
+                p_truncate      => {truncate},
+                p_tnd_filter    => NULL
+            );
+        END;
+        """
+    else:
+        sql_code = f"""
+        BEGIN
+            TABLECOPY_PACKAGE.TABLECOPY(
+                p_source_schema => '{source_schema}',
+                p_source_table  => '{source_table}',
+                p_target_schema => '{target_schema}',
+                p_target_table  => '{target_table}',
+                p_truncate      => {truncate},
+                p_tnd_filter    => TO_DATE('{chosen_date}', 'yyyy-mm-dd')
+            );
+        END;
+        """
+    return sql_code, 'TEST_RUNNER_REPO'
+
+
+def _build_truncate_sql(data):
+    truncate_schema = _default_if_none(data.get('truncate_schema'))
+    truncate_table  = _default_if_none(data.get('truncate_table'))
+    truncate_date   = _default_if_none(data.get('truncate_date'))
+
+    if not truncate_date:
+        sql_code = f"""
+        BEGIN
+            TEST_RUNNER_REPO.TRUNCATE_TND_TABLE(
+                p_CEL_SEMA   => '{truncate_schema}',
+                p_CEL_TABLA  => '{truncate_table}',
+                p_TND_SZURES => NULL
+            );
+        END;
+        """
+    else:
+        sql_code = f"""
+        BEGIN
+            TEST_RUNNER_REPO.TRUNCATE_TND_TABLE(
+                p_CEL_SEMA   => '{truncate_schema}',
+                p_CEL_TABLA  => '{truncate_table}',
+                p_TND_SZURES => TO_DATE('{truncate_date}', 'yyyy-mm-dd')
+            );
+        END;
+        """
+    return sql_code, 'TEST_RUNNER_REPO'
+
+
+def _build_lm_job_sql(data):
+    module = _default_if_none(data.get('module'))
+    _type  = _default_if_none(data.get('type'))
+    name   = _default_if_none(data.get('name'))
+
+    sql_code = f"""
+    DECLARE
+        p_result   VARCHAR2(4000);
+        p_err_code VARCHAR2(4000);
+        p_output   CLOB;
+    BEGIN
+        lm.{_type}.execute(1, '{module}', q'({name})', p_result, p_err_code, p_output, false);
+        DBMS_OUTPUT.PUT_LINE(p_result || ' - ' || p_err_code);
+        DBMS_OUTPUT.PUT_LINE(p_output);
+    END;
+    """
+    return sql_code, 'LM'
+
+
+def _build_stored_procedure_sql(data):
+    storedprocedure_type = _default_if_none(data.get('storedprocedure_type'))
+    parameters           = data.get('parameters', [])
+    parameter_details    = data.get('parameter_details', [])
+
+    sql_declare     = []
+    sql_exec_params = []
+    sql_output      = []
+
+    for param in parameters:
+        param_name  = param['name']
+        param_type  = param['type']
+        param_value = param['value']
+
+        param_detail = next((p for p in parameter_details if p['argument_name'] == param_name), None)
+        if not param_detail:
+            raise ValueError(f"Parameter detail not found for {param_name}")
+
+        data_type = _fix_data_type(param_detail['data_type'])
+
+        if param_type == 'OUT':
+            sql_declare.append(f"{param_name} {data_type};")
+            sql_exec_params.append(f"{param_name} => {param_name}")
+            sql_output.append(f"DBMS_OUTPUT.PUT_LINE({param_name});")
+        elif param_type == 'IN/OUT':
+            formatted_value = _format_parameter(param_value, data_type)
+            sql_declare.append(f"{param_name} {data_type} := {formatted_value};")
+            sql_exec_params.append(f"{param_name} => {param_name}")
+            sql_output.append(f"DBMS_OUTPUT.PUT_LINE({param_name});")
+        else:  # IN
+            if param_value not in (None, ''):
+                formatted_value = _format_parameter(param_value, data_type)
+                sql_exec_params.append(f"{param_name} => {formatted_value}")
+
+    declare_section = f"DECLARE\n    {' '.join(sql_declare)}\n" if sql_declare else ""
+    params_str      = ', '.join(sql_exec_params)
+    output_str      = ' '.join(sql_output)
+
+    if storedprocedure_type == 'SingleProcedure':
+        procedures_schema = _default_if_none(data.get('procedures_schema'))
+        storedobject_name = _default_if_none(data.get('storedobject_name'))
+        sql_code = f"""
+        {declare_section}BEGIN
+            {procedures_schema}.{storedobject_name}({params_str});
+            {output_str}
+        END;
+        """
+        target_user = procedures_schema
+    else:  # Package
+        procedures_schema_package  = _default_if_none(data.get('procedures_schema_package'))
+        storedpackage_name         = _default_if_none(data.get('storedpackage_name'))
+        storedobject_name_package  = _default_if_none(data.get('storedobject_name_package'))
+        sql_code = f"""
+        {declare_section}BEGIN
+            {procedures_schema_package}.{storedpackage_name}.{storedobject_name_package}({params_str});
+            {output_str}
+        END;
+        """
+        target_user = procedures_schema_package
+
+    return sql_code, target_user
+
+
+_SQL_BUILDERS = {
+    'TABLECOPY':        _build_tablecopy_sql,
+    'TRUNCATE_TABLE':   _build_truncate_sql,
+    'LM_JOB':           _build_lm_job_sql,
+    'STORED_PROCEDURE': _build_stored_procedure_sql,
+}
+
+
 @app.route('/add_step/<test_id>', methods=['POST'])
 @login_required
 def add_step(test_id):
     try:
-        if request.is_json:
-            data = request.get_json()
-        else:
+        if not request.is_json:
             return jsonify({'success': False, 'error': 'Invalid input format'})
 
+        data          = request.get_json()
         new_step_name = data.get('new_step_name')
-        step_type = data.get('step_type')
-        sql_code = ''
-       
-        def default_if_none(value, default=''):
-            return value if value is not None else default
+        step_type     = data.get('step_type')
 
-        def format_parameter(value, data_type):
-            if value is None:
-                return "NULL"
+        if step_type not in _SQL_BUILDERS:
+            return jsonify({'success': False, 'error': f'Unknown step type: {step_type}'}), 400
 
-            data_type = data_type.upper()
-
-            if data_type in ("VARCHAR2", "CHAR", "CLOB", "LONG"):
-                escaped_value = value.replace("'", "''")
-                return f"'{escaped_value}'"
-
-            elif data_type in ("NUMBER", "INTEGER", "FLOAT", "BINARY_DOUBLE", "BINARY_FLOAT", "BINARY_INTEGER", "PL/SQL BOOLEAN"):
-                return str(value)
-
-            elif data_type == "DATE":
-                return f"TO_DATE('{value}', 'YYYY-MM-DD')"
-
-            elif data_type == "TIMESTAMP":
-                return f"TO_TIMESTAMP('{value}', 'YYYY-MM-DD HH24:MI:SS')"
-
-            else:
-                raise ValueError(f"Unsupported data type: {data_type}")
-
-        if step_type == 'TABLECOPY':
-            target_user = 'TEST_RUNNER_REPO'
-            source_schema = default_if_none(data.get('source_schema'))
-            source_table = default_if_none(data.get('source_table'))
-            target_schema = default_if_none(data.get('target_schema'))
-            target_table = default_if_none(data.get('target_table'))
-            truncate = default_if_none(data.get('truncate'))
-            chosen_date = default_if_none(data.get('date'))
-
-            if chosen_date == "CURRENT_TND":
-                sql_code = f"""
-                BEGIN 
-                    TABLECOPY_PACKAGE.TABLECOPY_CURRENT(
-                        p_source_schema => '{source_schema}', 
-                        p_source_table => '{source_table}', 
-                        p_target_schema => '{target_schema}', 
-                        p_target_table => '{target_table}', 
-                        p_truncate => {truncate}
-                    ); 
-                END;
-                """
-            elif chosen_date == "MAX_TND":
-                sql_code = f"""
-                BEGIN 
-                    TABLECOPY_PACKAGE.TABLECOPY_MAX(
-                        p_source_schema => '{source_schema}', 
-                        p_source_table => '{source_table}', 
-                        p_target_schema => '{target_schema}', 
-                        p_target_table => '{target_table}', 
-                        p_truncate => {truncate}
-                    ); 
-                END;
-                """
-            elif chosen_date is None or chosen_date == "":
-                sql_code = f"""
-                BEGIN 
-                    TABLECOPY_PACKAGE.TABLECOPY(
-                        p_source_schema => '{source_schema}', 
-                        p_source_table => '{source_table}', 
-                        p_target_schema => '{target_schema}', 
-                        p_target_table => '{target_table}', 
-                        p_truncate => {truncate}, 
-                        p_tnd_filter => NULL
-                    ); 
-                END;
-                """
-            else: 
-                sql_code = f"""
-                BEGIN 
-                    TABLECOPY_PACKAGE.TABLECOPY(
-                        p_source_schema => '{source_schema}', 
-                        p_source_table => '{source_table}', 
-                        p_target_schema => '{target_schema}', 
-                        p_target_table => '{target_table}', 
-                        p_truncate => {truncate}, 
-                        p_tnd_filter => TO_DATE('{chosen_date}', 'yyyy-mm-dd')
-                    ); 
-                END;
-                """
-
-
-        elif step_type == 'TRUNCATE_TABLE':
-            target_user = 'TEST_RUNNER_REPO'
-            truncate_schema = default_if_none(data.get('truncate_schema'))
-            truncate_table = default_if_none(data.get('truncate_table'))
-            truncate_date = default_if_none(data.get('truncate_date'))
-
-            if truncate_date is None:
-                sql_code = f"""
-                BEGIN
-                    {target_user}.TRUNCATE_TND_TABLE(
-                        p_CEL_SEMA => '{truncate_schema}', 
-                        p_CEL_TABLA => '{truncate_table}', 
-                        p_TND_SZURES => NULL
-                    );
-                END;
-                """
-            else:
-                sql_code = f"""
-                BEGIN
-                    {target_user}.TRUNCATE_TND_TABLE(
-                        p_CEL_SEMA => '{truncate_schema}', 
-                        p_CEL_TABLA => '{truncate_table}', 
-                        p_TND_SZURES => TO_DATE('{truncate_date}', 'yyyy-mm-dd')
-                    );
-                END;
-                """
-
-        elif step_type == 'LM_JOB':
-            target_user = 'LM'
-            module = default_if_none(data.get('module'))
-            _type = default_if_none(data.get('type'))
-            name = default_if_none(data.get('name'))
-
-            sql_code = f"""
-            declare 
-                p_result varchar2(4000); 
-                p_err_code varchar2(4000); 
-                p_output clob; 
-            begin 
-                lm.{_type}.execute(1, '{module}', q'({name})', p_result, p_err_code, p_output, false); 
-                dbms_output.put_line(p_result || ' - ' || p_err_code); 
-                dbms_output.put_line(p_output); 
-            end; 
-            """
-        elif step_type == 'STORED_PROCEDURE':
-            storedprocedure_type = default_if_none(data.get('storedprocedure_type'))
-            parameters = data.get('parameters', [])
-            parameter_details = data.get('parameter_details', [])
-
-            sql_declare = [] 
-            sql_exec_params = []
-            sql_output = [] 
-
-            for param in parameters:
-                param_name = param['name']
-                param_type = param['type']
-                param_value = param['value']
-
-                param_detail = next((p for p in parameter_details if p['argument_name'] == param_name), None)
-                if not param_detail:
-                    raise ValueError(f"Parameter detail not found for {param_name}")
-
-                data_type = param_detail['data_type']
-
-                if param_type == 'OUT':
-                    sql_declare.append(f"{param_name} {data_type};")
-                    sql_exec_params.append(param_name)
-                    sql_output.append(f"DBMS_OUTPUT.PUT_LINE({param_name});")
-
-                elif param_type == 'IN/OUT':
-                    formatted_value = format_parameter(param_value, data_type)
-                    sql_declare.append(f"{param_name} {data_type} := {formatted_value};")
-                    sql_exec_params.append(param_name)
-                    sql_output.append(f"DBMS_OUTPUT.PUT_LINE({param_name});")
-
-                else:
-                    if param_value not in (None, ''):
-                        formatted_value = format_parameter(param_value, data_type)
-                        sql_exec_params.append(f"{param_name} => {formatted_value}")
-
-            declare_section = ""
-            if sql_declare:
-                declare_section = f"DECLARE\n    {' '.join(sql_declare)}\n"
-
-            if storedprocedure_type == 'SingleProcedure':
-                procedures_schema = default_if_none(data.get('procedures_schema'))
-                storedobject_name = default_if_none(data.get('storedobject_name'))
-                sql_code = f"""
-                {declare_section}BEGIN
-                    {procedures_schema}.{storedobject_name}({', '.join(sql_exec_params)});
-                    {' '.join(sql_output)}
-                END;
-                """
-
-            elif storedprocedure_type == 'Package':
-                procedures_schema_package = default_if_none(data.get('procedures_schema_package'))
-                storedpackage_name = default_if_none(data.get('storedpackage_name'))
-                storedobject_name_package = default_if_none(data.get('storedobject_name_package'))
-                sql_code = f"""
-                {declare_section}BEGIN
-                    {procedures_schema_package}.{storedpackage_name}.{storedobject_name_package}({', '.join(sql_exec_params)});
-                    {' '.join(sql_output)}
-                END;
-                """
-
-            target_user = procedures_schema if storedprocedure_type == 'SingleProcedure' else procedures_schema_package
+        sql_code, target_user = _SQL_BUILDERS[step_type](data)
 
         connection = pool.acquire()
         cursor = connection.cursor()
 
-        new_order_query = "SELECT MAX(ORDERNUMBER) FROM TEST_STEPS WHERE TEST_ID = :test_id"
-        cursor.execute(new_order_query, {'test_id': test_id})
+        cursor.execute("SELECT MAX(ORDERNUMBER) FROM TEST_STEPS WHERE TEST_ID = :test_id", {'test_id': test_id})
         result = cursor.fetchone()
         new_order_number = (result[0] if result[0] is not None else 0) + 1
 
         cursor.execute("SELECT TEST_STEPS_SEQ.NEXTVAL FROM dual")
-        new_id = cursor.fetchone()[0] 
+        new_id = cursor.fetchone()[0]
 
-        sql = "INSERT INTO TEST_STEPS (ID, TEST_ID, NAME, ORDERNUMBER, STATUS, TYPE, SQL_CODE, TARGET_USER, ACTIVITY) VALUES (:1, :2, :3, :4, :5, :6, :7, :8, :9)"
-        data = (new_id, test_id, new_step_name, new_order_number, 'ADDED', step_type, sql_code, target_user, 'ACTIVE')
-
-        cursor.execute(sql, data)
+        cursor.execute(
+            "INSERT INTO TEST_STEPS (ID, TEST_ID, NAME, ORDERNUMBER, STATUS, TYPE, SQL_CODE, TARGET_USER, ACTIVITY, STEP_PARAMS) VALUES (:1, :2, :3, :4, :5, :6, :7, :8, :9, :10)",
+            (new_id, test_id, new_step_name, new_order_number, 'ADDED', step_type, sql_code, target_user, 'ACTIVE', json.dumps(data))
+        )
         connection.commit()
-
         cursor.close()
         connection.close()
 
         return jsonify({'success': True, 'redirect_url': url_for('edit_steps', test_id=test_id)})
 
-    except oracledb.Error as error:
-        return jsonify({'success': False, 'error': str(error)})
-    except Exception as error:
-        return jsonify({'success': False, 'error': str(error)})
+    except (oracledb.Error, Exception) as error:
+        app.logger.error("Failed to add step", exc_info=True)
+        return jsonify({'success': False, 'error': 'A database error occurred.'}), 500
+
+
+@app.route('/get_step_params/<int:step_id>', methods=['GET'])
+@login_required
+def get_step_params(step_id):
+    try:
+        connection = pool.acquire()
+        cursor = connection.cursor()
+        cursor.execute("SELECT STEP_PARAMS FROM TEST_STEPS WHERE ID = :id", {'id': step_id})
+        row = cursor.fetchone()
+        cursor.close()
+        pool.release(connection)
+        if not row or not row[0]:
+            abort(404)
+        params_json = row[0].read() if hasattr(row[0], 'read') else row[0]
+        return params_json, 200, {'Content-Type': 'application/json'}
+    except oracledb.Error:
+        app.logger.error("Failed to get step params", exc_info=True)
+        return jsonify({'error': 'A database error occurred.'}), 500
+
+
+@app.route('/edit_step/<int:step_id>', methods=['POST'])
+@login_required
+def edit_step(step_id):
+    try:
+        if not request.is_json:
+            return jsonify({'success': False, 'error': 'Invalid input format'})
+
+        data          = request.get_json()
+        new_step_name = data.get('new_step_name')
+        step_type     = data.get('step_type')
+
+        if step_type not in _SQL_BUILDERS:
+            return jsonify({'success': False, 'error': f'Unknown step type: {step_type}'}), 400
+
+        sql_code, target_user = _SQL_BUILDERS[step_type](data)
+
+        connection = pool.acquire()
+        cursor = connection.cursor()
+
+        cursor.execute("SELECT TEST_ID FROM TEST_STEPS WHERE ID = :id", {'id': step_id})
+        row = cursor.fetchone()
+        if not row:
+            abort(404)
+        test_id = row[0]
+
+        cursor.execute(
+            "UPDATE TEST_STEPS SET NAME = :name, TYPE = :type, SQL_CODE = :sql_code, TARGET_USER = :target_user, STEP_PARAMS = :step_params WHERE ID = :id",
+            {'name': new_step_name, 'type': step_type, 'sql_code': sql_code, 'target_user': target_user, 'step_params': json.dumps(data), 'id': step_id}
+        )
+        connection.commit()
+        cursor.close()
+        connection.close()
+
+        return jsonify({'success': True, 'redirect_url': url_for('edit_steps', test_id=test_id)})
+
+    except (oracledb.Error, Exception):
+        app.logger.error("Failed to edit step", exc_info=True)
+        return jsonify({'success': False, 'error': 'A database error occurred.'}), 500
+
+
+@app.route('/duplicate_step', methods=['POST'])
+@login_required
+def duplicate_step():
+    try:
+        step_id = request.form['id']
+        test_id = request.form['test_id']
+
+        connection = pool.acquire()
+        cursor = connection.cursor()
+
+        cursor.execute(
+            "SELECT NAME, TYPE, SQL_CODE, TARGET_USER, ACTIVITY, STEP_PARAMS FROM TEST_STEPS WHERE ID = :id",
+            {'id': step_id}
+        )
+        row = cursor.fetchone()
+        if not row:
+            abort(404)
+
+        name, step_type, sql_code, target_user, activity, step_params = row
+        if hasattr(step_params, 'read'):
+            step_params = step_params.read()
+
+        cursor.execute("SELECT MAX(ORDERNUMBER) FROM TEST_STEPS WHERE TEST_ID = :test_id", {'test_id': test_id})
+        result = cursor.fetchone()
+        new_order_number = (result[0] if result[0] is not None else 0) + 1
+
+        cursor.execute("SELECT TEST_STEPS_SEQ.NEXTVAL FROM dual")
+        new_id = cursor.fetchone()[0]
+
+        cursor.execute(
+            "INSERT INTO TEST_STEPS (ID, TEST_ID, NAME, ORDERNUMBER, STATUS, TYPE, SQL_CODE, TARGET_USER, ACTIVITY, STEP_PARAMS) VALUES (:1, :2, :3, :4, :5, :6, :7, :8, :9, :10)",
+            (new_id, test_id, f"Copy of {name}", new_order_number, 'ADDED', step_type, sql_code, target_user, activity, step_params)
+        )
+        connection.commit()
+        cursor.close()
+        connection.close()
+
+        return redirect(url_for('edit_steps', test_id=test_id))
+
+    except oracledb.Error:
+        app.logger.error("Failed to duplicate step", exc_info=True)
+        return "A database error occurred.", 500
 
 
 @app.route('/delete_step', methods=['POST'])
@@ -628,7 +818,8 @@ def delete_step():
         return redirect(url_for('edit_steps', test_id=test_id))
 
     except oracledb.Error as error:
-        return f"Error deleting step: {error}"
+        app.logger.error("Failed to delete step", exc_info=True)
+        return "A database error occurred.", 500
 
 
 @app.route('/step_activity', methods=['POST'])
@@ -653,13 +844,14 @@ def step_activity():
         return redirect(url_for('edit_steps', test_id=test_id))
 
     except oracledb.Error as error:
-        return f"Error altering step activity: {error}"
+        app.logger.error("Failed to toggle step activity", exc_info=True)
+        return "A database error occurred.", 500
 
 
-@app.route('/get_tables_for_schema', methods=['POST'])
+@app.route('/get_tables_for_schema', methods=['GET'])
 @login_required
 def get_tables_for_schema():
-    selected_schema = request.json['schema']
+    selected_schema = request.args.get('schema')
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
@@ -670,13 +862,14 @@ def get_tables_for_schema():
         pool.release(connection)
         return json.dumps(table_names)
     except Exception as e:
-        return json.dumps({'error': str(e)})
+        app.logger.error("Lookup endpoint error", exc_info=True)
+        return json.dumps({'error': 'A database error occurred.'})
 
 
-@app.route('/get_tables_for_prod_schema', methods=['POST'])
+@app.route('/get_tables_for_prod_schema', methods=['GET'])
 @login_required
 def get_tables_for_prod_schema():
-    selected_schema = request.json['schema']
+    selected_schema = request.args.get('schema')
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
@@ -687,13 +880,14 @@ def get_tables_for_prod_schema():
         pool.release(connection)
         return json.dumps(table_names)
     except Exception as e:
-        return json.dumps({'error': str(e)})
+        app.logger.error("Lookup endpoint error", exc_info=True)
+        return json.dumps({'error': 'A database error occurred.'})
 
 
-@app.route('/get_procedures_for_schema', methods=['POST'])
+@app.route('/get_procedures_for_schema', methods=['GET'])
 @login_required
 def get_procedures_for_schema():
-    selected_schema = request.json['schema']
+    selected_schema = request.args.get('schema')
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
@@ -704,14 +898,15 @@ def get_procedures_for_schema():
         pool.release(connection)
         return json.dumps(procedure_names)
     except Exception as e:
-        return json.dumps({'error': str(e)})
+        app.logger.error("Lookup endpoint error", exc_info=True)
+        return json.dumps({'error': 'A database error occurred.'})
 
 
-@app.route('/get_parameters_for_stored_procedure', methods=['POST'])
+@app.route('/get_parameters_for_stored_procedure', methods=['GET'])
 @login_required
 def get_parameters_for_stored_procedure():
-    selectedSchema = request.json['schema']
-    selectedStoredObjectName = request.json['storedobject_name']
+    selectedSchema = request.args.get('schema')
+    selectedStoredObjectName = request.args.get('storedobject_name')
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
@@ -741,15 +936,16 @@ def get_parameters_for_stored_procedure():
         pool.release(connection)
         return json.dumps(parameter_details)
     except Exception as e:
-        return json.dumps({'error': str(e)})
+        app.logger.error("Lookup endpoint error", exc_info=True)
+        return json.dumps({'error': 'A database error occurred.'})
 
 
-@app.route('/get_parameters_for_stored_procedure_in_package', methods=['POST'])
+@app.route('/get_parameters_for_stored_procedure_in_package', methods=['GET'])
 @login_required
 def get_parameters_for_stored_procedure_in_package():
-    selectedStoredObjectName = request.json['storedobject_name']
-    selectedSchema = request.json['schema']
-    selectedPackage = request.json['package_name']
+    selectedStoredObjectName = request.args.get('storedobject_name')
+    selectedSchema = request.args.get('schema')
+    selectedPackage = request.args.get('package_name')
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
@@ -779,14 +975,15 @@ def get_parameters_for_stored_procedure_in_package():
         pool.release(connection)
         return json.dumps(parameter_details)
     except Exception as e:
-        return json.dumps({'error': str(e)})
+        app.logger.error("Lookup endpoint error", exc_info=True)
+        return json.dumps({'error': 'A database error occurred.'})
 
 
 
-@app.route('/get_packages_for_schema', methods=['POST'])
+@app.route('/get_packages_for_schema', methods=['GET'])
 @login_required
 def get_packages_for_schema():
-    selected_schema = request.json['schema']
+    selected_schema = request.args.get('schema')
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
@@ -797,14 +994,15 @@ def get_packages_for_schema():
         pool.release(connection)
         return json.dumps(package_names)
     except Exception as e:
-        return json.dumps({'error': str(e)})
+        app.logger.error("Lookup endpoint error", exc_info=True)
+        return json.dumps({'error': 'A database error occurred.'})
 
 
-@app.route('/get_procedures_for_package', methods=['POST'])
+@app.route('/get_procedures_for_package', methods=['GET'])
 @login_required
 def get_procedures_for_package():
-    selected_package = request.json['package']
-    selected_schema = request.json['schema']
+    selected_package = request.args.get('package')
+    selected_schema = request.args.get('schema')
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
@@ -815,7 +1013,8 @@ def get_procedures_for_package():
         pool.release(connection)
         return json.dumps(procedure_names)
     except Exception as e:
-        return json.dumps({'error': str(e)})
+        app.logger.error("Lookup endpoint error", exc_info=True)
+        return json.dumps({'error': 'A database error occurred.'})
 
 
 @app.route('/get_workdays', methods=['GET'])
@@ -831,13 +1030,14 @@ def get_workdays():
         pool.release(connection)
         return json.dumps(workdays)
     except Exception as e:
-        return json.dumps({'error': str(e)})
+        app.logger.error("Lookup endpoint error", exc_info=True)
+        return json.dumps({'error': 'A database error occurred.'})
 
 
-@app.route('/get_names_for_module', methods=['POST'])
+@app.route('/get_names_for_module', methods=['GET'])
 @login_required
 def get_names_for_module():
-    selected_module = request.json['module']
+    selected_module = request.args.get('module')
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
@@ -848,13 +1048,14 @@ def get_names_for_module():
         pool.release(connection)
         return json.dumps(names)
     except Exception as e:
-        return json.dumps({'error': str(e)})
+        app.logger.error("Lookup endpoint error", exc_info=True)
+        return json.dumps({'error': 'A database error occurred.'})
 
 
-@app.route('/get_types_for_module', methods=['POST'])
+@app.route('/get_types_for_module', methods=['GET'])
 @login_required
 def get_types_for_module():
-    selected_module = request.json['module']
+    selected_module = request.args.get('module')
     try:
         connection = pool.acquire()
         cursor = connection.cursor()
@@ -865,7 +1066,8 @@ def get_types_for_module():
         pool.release(connection)
         return json.dumps(types)
     except Exception as e:
-        return json.dumps({'error': str(e)})
+        app.logger.error("Lookup endpoint error", exc_info=True)
+        return json.dumps({'error': 'A database error occurred.'})
 
 
 
@@ -889,7 +1091,8 @@ def run_test_now(test_id):
         return {'success': True, 'v_run_id': v_run_id}
 
     except oracledb.Error as error:
-        return {'success': False, 'error': str(error)}
+        app.logger.error("Failed to run test", exc_info=True)
+        return {'success': False, 'error': 'A database error occurred.'}
 
 @app.route('/run_test/<test_id>', methods=['POST'])
 @login_required
@@ -927,7 +1130,8 @@ def schedule_test_run(test_id, start_time=None, recurrence=None):
         return {'success': True}
 
     except oracledb.Error as error:
-        return {'success': False, 'error': str(error)}
+        app.logger.error("Failed to schedule test", exc_info=True)
+        return {'success': False, 'error': 'A database error occurred.'}
 
 @app.route('/schedule_test/<test_id>', methods=['POST'])
 @login_required
@@ -996,7 +1200,8 @@ def delete_scheduled_run(job_name):
         cursor.close()
         return jsonify({'success': True})
     except oracledb.Error as e:
-        return jsonify({'success': False, 'error': str(e)}), 500
+        app.logger.error("Failed to delete scheduled run", exc_info=True)
+        return jsonify({'success': False, 'error': 'A database error occurred.'}), 500
 
 
 @app.route('/archive_test', methods=['POST'])
@@ -1024,7 +1229,8 @@ def archive_test():
         return redirect(url_for('index'))
 
     except oracledb.Error as error:
-        return f"Error archiving test: {error}"
+        app.logger.error("Failed to archive test", exc_info=True)
+        return "A database error occurred.", 500
 
 
 @app.route('/kill_job', methods=['POST'])
@@ -1065,7 +1271,8 @@ def kill_job():
         return jsonify({'message': f'Job "{job_name}" stopped successfully.'})
 
     except oracledb.Error as error:
-        return jsonify({'message': f'Error stopping job: {error}'}), 500
+        app.logger.error("Failed to stop job", exc_info=True)
+        return jsonify({'message': 'A database error occurred.'}), 500
 
 
 @app.route('/test_steps_logs/<int:test_id>')
@@ -1102,7 +1309,8 @@ def test_steps_logs(test_id):
         return render_template('test_steps_logs.html', test_id=test_id, logs=logs)
 
     except oracledb.Error as error:
-        return f"Error loading logs: {error}"
+        app.logger.error("Failed to load test logs", exc_info=True)
+        return "A database error occurred.", 500
 
 
 
