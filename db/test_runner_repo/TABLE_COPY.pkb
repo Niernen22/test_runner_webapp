@@ -1,33 +1,30 @@
 CREATE OR REPLACE PACKAGE BODY TEST_RUNNER_REPO.TABLECOPY_PACKAGE AS
-   FUNCTION TABLE_EXISTS(
+   FUNCTION SOURCE_EXISTS(
        p_TABLE_OWNER VARCHAR2,
        p_TABLE_NAME VARCHAR2
    ) RETURN BOOLEAN IS
-       v_exists NUMBER;
+       v_count NUMBER;
    BEGIN
-       BEGIN
-           SELECT COUNT(*)
-           INTO v_exists
-           FROM dba_tables
-           WHERE table_name = p_TABLE_NAME
-             AND owner = p_TABLE_OWNER;
+       EXECUTE IMMEDIATE 'SELECT COUNT(*) FROM dba_tables@ODS_PROD WHERE owner = :1 AND table_name = :2'
+       INTO v_count USING p_TABLE_OWNER, p_TABLE_NAME;
+       RETURN v_count > 0;
+   EXCEPTION
+       WHEN OTHERS THEN
+           RETURN FALSE;
+   END SOURCE_EXISTS;
 
-           IF v_exists = 1 THEN
-               RETURN TRUE;
-           END IF;
-       EXCEPTION
-           WHEN NO_DATA_FOUND THEN
-               NULL;
-       END;
-
-       BEGIN
-           EXECUTE IMMEDIATE 'SELECT COUNT(*) FROM ' || p_TABLE_OWNER || '.' || p_TABLE_NAME || '@ODS_PROD';
-           RETURN TRUE;
-       EXCEPTION
-           WHEN OTHERS THEN
-               RETURN FALSE;
-       END;
-   END TABLE_EXISTS;
+   FUNCTION TARGET_EXISTS(
+       p_TABLE_OWNER VARCHAR2,
+       p_TABLE_NAME VARCHAR2
+   ) RETURN BOOLEAN IS
+       v_count NUMBER;
+   BEGIN
+       SELECT COUNT(*) INTO v_count
+       FROM dba_tables
+       WHERE owner = p_TABLE_OWNER
+         AND table_name = p_TABLE_NAME;
+       RETURN v_count > 0;
+   END TARGET_EXISTS;
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------
 PROCEDURE TND_TABLESPACE_CHECK (
@@ -144,8 +141,7 @@ BEGIN
     ON t1.COLUMN_NAME = t2.COLUMN_NAME;
 
     IF v_common_columns = 0 THEN
-    DBMS_OUTPUT.PUT_LINE('No columns in common. Exiting...');
-    RETURN;
+        RAISE_APPLICATION_ERROR(-20003, 'No columns in common between ' || p_source_schema || '.' || p_source_table || ' and ' || p_target_schema || '.' || p_target_table);
     END IF;
 END COMMON_COLUMNS;
 
@@ -154,7 +150,8 @@ PROCEDURE COPY_COLUMNS (
   p_source_schema VARCHAR2,
   p_source_table VARCHAR2,
   p_target_schema VARCHAR2,
-  p_target_table VARCHAR2) IS
+  p_target_table VARCHAR2,
+  p_row_limit NUMBER DEFAULT NULL) IS
   v_column_list CLOB;
   v_dblink_sql VARCHAR2(20) := '@ODS_PROD';
 
@@ -166,7 +163,8 @@ BEGIN
     ON t1.COLUMN_NAME = t2.COLUMN_NAME;
 
     EXECUTE IMMEDIATE 'INSERT INTO ' || p_target_schema || '.' || p_target_table || ' (' || v_column_list || ') ' ||
-                  'SELECT ' || v_column_list || ' FROM ' || p_source_schema || '.' || p_source_table || v_dblink_sql;
+                  'SELECT ' || v_column_list || ' FROM ' || p_source_schema || '.' || p_source_table || v_dblink_sql ||
+                  CASE WHEN p_row_limit IS NOT NULL THEN ' FETCH FIRST ' || p_row_limit || ' ROWS ONLY' ELSE '' END;
 
     DBMS_OUTPUT.PUT_LINE('Data copied.');
 END COPY_COLUMNS;
@@ -176,7 +174,8 @@ PROCEDURE COPY_COLUMNS_TND (
   p_source_schema VARCHAR2,
   p_source_table VARCHAR2,
   p_target_schema VARCHAR2,
-  p_target_table VARCHAR2) IS
+  p_target_table VARCHAR2,
+  p_row_limit NUMBER DEFAULT NULL) IS
   v_column_list CLOB;
   tnd_column NUMBER;
   v_dblink_sql VARCHAR2(20) := '@ODS_PROD';
@@ -199,16 +198,19 @@ BEGIN
 
     EXECUTE IMMEDIATE 'INSERT INTO ' || p_target_schema || '.' || p_target_table || ' (' || v_column_list || ') ' ||
                       'SELECT ' || v_column_list || ' FROM ' || p_source_schema || '.' || p_source_table || v_dblink_sql ||
-                      ' WHERE TND = :1' USING p_tnd_filter;
+                      ' WHERE TND = :1' ||
+                      CASE WHEN p_row_limit IS NOT NULL THEN ' FETCH FIRST ' || p_row_limit || ' ROWS ONLY' ELSE '' END
+                      USING p_tnd_filter;
     DBMS_OUTPUT.PUT_LINE('Data copied where TND = ' || TO_CHAR(p_tnd_filter, 'yyyy-mm-dd') || '.');
 
     ELSE
 
-   TABLECOPY_PACKAGE.COPY_COLUMNS
+    TABLECOPY_PACKAGE.COPY_COLUMNS
     (p_source_schema => p_source_schema,
      p_source_table => p_source_table,
      p_target_schema => p_target_schema,
-     p_target_table => p_target_table
+     p_target_table => p_target_table,
+     p_row_limit => p_row_limit
      );
      END IF;
 END COPY_COLUMNS_TND;
@@ -631,12 +633,14 @@ BEGIN
         p_target_table => p_target_table
         );
     ELSE
-        DBMS_OUTPUT.PUT_LINE('Tables have different or unknown partitioning types.');
+        IF v_partition_type1 IS NOT NULL AND v_partition_type2 IS NOT NULL THEN
+            RAISE_APPLICATION_ERROR(-20004, 'Partition type mismatch: source is ' || v_partition_type1 || ', target is ' || v_partition_type2);
+        ELSIF v_partition_type1 IS NOT NULL AND v_partition_type2 IS NULL THEN
+            RAISE_APPLICATION_ERROR(-20004, 'Source is ' || v_partition_type1 || ' partitioned but target is not partitioned');
+        ELSIF v_partition_type1 IS NULL AND v_partition_type2 IS NOT NULL THEN
+            RAISE_APPLICATION_ERROR(-20004, 'Target is ' || v_partition_type2 || ' partitioned but source is not partitioned');
+        END IF;
     END IF;
-
-    EXCEPTION
-    WHEN NO_DATA_FOUND THEN
-        DBMS_OUTPUT.PUT_LINE('No partitioning found.');
 
 END RANGE_OR_LIST;
 ---------------------------------------------------------------------------------------------------------------------------------------------------
@@ -753,29 +757,27 @@ END RANGE_OR_LIST_TND;
         p_target_schema VARCHAR2,
         p_target_table VARCHAR2,
         p_TRUNCATE BOOLEAN DEFAULT FALSE,
-        p_tnd_filter DATE DEFAULT NULL
+        p_tnd_filter DATE DEFAULT NULL,
+        p_row_limit NUMBER DEFAULT NULL
     ) AS
-        v_PARTITION_NAME VARCHAR2(30);
         v_partition_count NUMBER;
         v_source_table_exists BOOLEAN;
         v_target_table_exists BOOLEAN;
         v_tnd_name VARCHAR2(20);
         v_tnd_partition NUMBER;
-
-        v_partition_name VARCHAR2(30);
         v_source_tnd_column NUMBER;
         v_target_tnd_column NUMBER;
 
 BEGIN
 --------------------Léteznek a táblák?
-    v_source_table_exists := TABLECOPY_PACKAGE.TABLE_EXISTS(p_source_schema, p_source_table);
+    v_source_table_exists := TABLECOPY_PACKAGE.SOURCE_EXISTS(p_source_schema, p_source_table);
     IF NOT v_source_table_exists THEN
-        RAISE_APPLICATION_ERROR(-20002, 'Table not found: ' || p_source_table);
+        RAISE_APPLICATION_ERROR(-20002, 'Table not found: ' || p_source_schema || '.' || p_source_table);
     END IF;
 
-    v_target_table_exists := TABLECOPY_PACKAGE.TABLE_EXISTS(p_source_schema, p_source_table);
+    v_target_table_exists := TABLECOPY_PACKAGE.TARGET_EXISTS(p_target_schema, p_target_table);
     IF NOT v_target_table_exists THEN
-        RAISE_APPLICATION_ERROR(-20002, 'Table not found: ' || p_source_table);
+        RAISE_APPLICATION_ERROR(-20002, 'Table not found: ' || p_target_schema || '.' || p_target_table);
     END IF;
 
 --------------------Vannak közös oszlopaik?
@@ -807,7 +809,8 @@ BEGIN
     (p_source_schema => p_source_schema,
      p_source_table => p_source_table,
      p_target_schema => p_target_schema,
-     p_target_table => p_target_table
+     p_target_table => p_target_table,
+     p_row_limit => p_row_limit
      );
 --------------------Ha van TND szűrés...
      ELSE
@@ -816,28 +819,14 @@ BEGIN
      AND COLUMN_NAME = 'TND';
 
      IF v_source_tnd_column = 0 THEN
-     DBMS_OUTPUT.PUT_LINE('Can''t filter for tnd, missing tnd column in source table: ' || p_source_table);
-     RAISE_APPLICATION_ERROR(-20002, 'Can''t filter for tnd, missing tnd column in source table: ' || p_source_table);
-
+         RAISE_APPLICATION_ERROR(-20002, 'Can''t filter for TND, missing TND column in source table: ' || p_source_schema || '.' || p_source_table);
      END IF;
 
      SELECT COUNT(*) INTO v_target_tnd_column FROM all_tab_columns WHERE TABLE_NAME = p_target_table AND OWNER = p_target_schema
      AND COLUMN_NAME = 'TND';
 
      IF v_target_tnd_column = 0 THEN
-     DBMS_OUTPUT.PUT_LINE('Can''t filter for tnd, missing tnd column in target table: ' || p_target_table);
-     RAISE_APPLICATION_ERROR(-20002, 'Can''t filter for tnd, missing tnd column in target table: ' || p_target_table);
-     END IF;
-
-     -----------------HA van TND szűrés és truncatelni kell...
-     IF p_TRUNCATE = TRUE THEN
-    TABLECOPY_PACKAGE.TRUNCATE_TND_TABLE
-    (p_tnd_filter => p_tnd_filter,
-     p_source_schema => p_source_schema,
-     p_source_table => p_source_table,
-     p_target_schema => p_target_schema,
-     p_target_table => p_target_table
-     );
+         RAISE_APPLICATION_ERROR(-20002, 'Can''t filter for TND, missing TND column in target table: ' || p_target_schema || '.' || p_target_table);
      END IF;
 
     v_tnd_name := 'P_' || TO_CHAR(p_tnd_filter, 'YYYYMMDD');
@@ -848,63 +837,58 @@ BEGIN
     WHERE TABLE_NAME = p_target_table
     AND TABLE_OWNER = p_target_schema
     AND PARTITION_NAME = v_tnd_name;
-    --------------------Ha van TND szűrés, de nincs meg a hozzátartozó partíció
+
+    -----------------HA van TND szűrés és truncatelni kell...
+    IF p_TRUNCATE = TRUE THEN
+        TABLECOPY_PACKAGE.TRUNCATE_TND_TABLE(
+            p_tnd_filter    => p_tnd_filter,
+            p_source_schema => p_source_schema,
+            p_source_table  => p_source_table,
+            p_target_schema => p_target_schema,
+            p_target_table  => p_target_table
+        );
+    END IF;
+
+    --------------------Ha nincs meg a hozzátartozó partíció
     IF v_tnd_partition = 0 THEN
 
-    SELECT COUNT(*)
-    INTO v_partition_count
-    FROM DBA_TAB_PARTITIONS
-    WHERE TABLE_NAME = p_target_table
-    AND TABLE_OWNER = p_target_schema;
+        SELECT COUNT(*)
+        INTO v_partition_count
+        FROM DBA_TAB_PARTITIONS
+        WHERE TABLE_NAME = p_target_table
+        AND TABLE_OWNER = p_target_schema;
 
-    IF v_partition_count > 0 THEN
+        --------------------Partícionált, de nincs meg a TND partíció — létrehozás + másolás
+        IF v_partition_count > 0 THEN
+            TABLECOPY_PACKAGE.RANGE_OR_LIST_TND(
+                p_tnd_filter    => p_tnd_filter,
+                p_source_schema => p_source_schema,
+                p_source_table  => p_source_table,
+                p_target_schema => p_target_schema,
+                p_target_table  => p_target_table
+            );
+        END IF;
 
-    --------------------Ha van TND szűrés, de nincs meg a hozzátartozó partíció, de partícionált, Range vagy List partíciók + táblaterek, adatok másolása
-    TABLECOPY_PACKAGE.RANGE_OR_LIST_TND(
-    p_tnd_filter => p_tnd_filter,
-    p_source_schema => p_source_schema,
-    p_source_table => p_source_table,
-    p_target_schema => p_target_schema,
-    p_target_table => p_target_table
-    );
+        --------------------Nem partícionált vagy újonnan létrehozott partícióba másolás
+        TABLECOPY_PACKAGE.COPY_COLUMNS_TND(
+            p_tnd_filter    => p_tnd_filter,
+            p_source_schema => p_source_schema,
+            p_source_table  => p_source_table,
+            p_target_schema => p_target_schema,
+            p_target_table  => p_target_table,
+            p_row_limit     => p_row_limit
+        );
 
-    TABLECOPY_PACKAGE.COPY_COLUMNS_TND(
-    p_tnd_filter => p_tnd_filter,
-    p_source_schema => p_source_schema,
-    p_source_table => p_source_table,
-    p_target_schema => p_target_schema,
-    p_target_table => p_target_table
-    );
------------------Ha van TND szűrés, de nincs meg a hozzátartozó partíció, nem partícionált, adatok másolása
+    --------------------Megvan a hozzátartozó partíció — csak másolás
     ELSE
-    TABLECOPY_PACKAGE.COPY_COLUMNS_TND(
-    p_tnd_filter => p_tnd_filter,
-    p_source_schema => p_source_schema,
-    p_source_table => p_source_table,
-    p_target_schema => p_target_schema,
-    p_target_table => p_target_table
-    );
-
-    END IF;
-    ELSE
-    --------------------Ha van TND szűrés, megvan a hozzátartozó partíció, Range vagy List partíciók + táblaterek, adatok másolása
-
-    TABLECOPY_PACKAGE.RANGE_OR_LIST_TND(
-    p_tnd_filter => p_tnd_filter,
-    p_source_schema => p_source_schema,
-    p_source_table => p_source_table,
-    p_target_schema => p_target_schema,
-    p_target_table => p_target_table
-    );
-
-    TABLECOPY_PACKAGE.COPY_COLUMNS_TND(
-    p_tnd_filter => p_tnd_filter,
-    p_source_schema => p_source_schema,
-    p_source_table => p_source_table,
-    p_target_schema => p_target_schema,
-    p_target_table => p_target_table
-    );
-
+        TABLECOPY_PACKAGE.COPY_COLUMNS_TND(
+            p_tnd_filter    => p_tnd_filter,
+            p_source_schema => p_source_schema,
+            p_source_table  => p_source_table,
+            p_target_schema => p_target_schema,
+            p_target_table  => p_target_table,
+            p_row_limit     => p_row_limit
+        );
     END IF;
 
  END IF;
@@ -921,13 +905,14 @@ PROCEDURE TABLECOPY_MAX (
     p_source_table VARCHAR2,
     p_target_schema VARCHAR2,
     p_target_table VARCHAR2,
-    p_truncate BOOLEAN DEFAULT FALSE
+    p_truncate BOOLEAN DEFAULT FALSE,
+    p_row_limit NUMBER DEFAULT NULL
 ) IS
     p_tnd_filter DATE;
 BEGIN
     EXECUTE IMMEDIATE 'SELECT MAX(tnd) FROM ' || p_source_schema || '.' || p_source_table ||'@ODS_PROD'
     INTO p_tnd_filter;
-    
+
     DBMS_OUTPUT.PUT_LINE('MAX TND: ' || p_tnd_filter);
 
     TABLECOPY_PACKAGE.TABLECOPY(
@@ -936,7 +921,8 @@ BEGIN
     p_source_table => p_source_table,
     p_target_schema => p_target_schema,
     p_target_table => p_target_table,
-    p_truncate => p_truncate
+    p_truncate => p_truncate,
+    p_row_limit => p_row_limit
     );
 END TABLECOPY_MAX;
 
@@ -945,12 +931,13 @@ PROCEDURE TABLECOPY_CURRENT (
     p_source_table VARCHAR2,
     p_target_schema VARCHAR2,
     p_target_table VARCHAR2,
-    p_truncate BOOLEAN DEFAULT FALSE
+    p_truncate BOOLEAN DEFAULT FALSE,
+    p_row_limit NUMBER DEFAULT NULL
 ) IS
     p_tnd_filter DATE;
 BEGIN
     EXECUTE IMMEDIATE 'SELECT get_tnd FROM dual' INTO p_tnd_filter;
-    
+
     DBMS_OUTPUT.PUT_LINE('CURRENT TND: ' || p_tnd_filter);
 
     TABLECOPY_PACKAGE.TABLECOPY(
@@ -959,7 +946,8 @@ BEGIN
     p_source_table => p_source_table,
     p_target_schema => p_target_schema,
     p_target_table => p_target_table,
-    p_truncate => p_truncate
+    p_truncate => p_truncate,
+    p_row_limit => p_row_limit
     );
 END TABLECOPY_CURRENT;
 
