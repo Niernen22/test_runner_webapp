@@ -298,42 +298,7 @@ alter table USERS
 
 TABLECOPY LOGIC:
 
-  TABLECOPY
-  │
-  ├─ SOURCE_EXISTS? ──NO──► RAISE ERROR
-  ├─ TARGET_EXISTS? ──NO──► RAISE ERROR
-  ├─ COMMON_COLUMNS? ──0──► RAISE ERROR
-  │
-  ├─ TND filter?
-  │
-  ├──NO──────────────────────────────────────────────────────┐
-  │   ├─ Truncate? ──YES──► TRUNCATE whole target table      │
-  │   ├─ RANGE_OR_LIST                                       │
-  │   │     ├─ Both RANGE ──► create missing partitions      │
-  │   │     ├─ Both LIST  ──► create missing partitions      │
-  │   │     ├─ Mismatch   ──► RAISE ERROR                    │
-  │   │     └─ Both NULL  ──► do nothing (not partitioned)   │
-  │   └─ COPY_COLUMNS                                        │
-  │         └─ INSERT SELECT [FETCH FIRST n]                 │
-  │                                                          │
-  └──YES─────────────────────────────────────────────────────┘
-      ├─ Source has TND column? ──NO──► RAISE ERROR
-      ├─ Target has TND column? ──NO──► RAISE ERROR
-      ├─ Check if target's TND partition exists
-      ├─ Truncate? ──YES──► TRUNCATE_TND_TABLE
-      │
-      ├─ TND partition exists?
-      │
-      ├──NO──► Target has any partitions?
-      │             ├──YES──► RANGE_OR_LIST_TND (create TND partition)
-      │             │              └─► COPY_COLUMNS_TND (INSERT WHERE TND=date [FETCH FIRST n])
-      │             └──NO───► COPY_COLUMNS_TND (INSERT WHERE TND=date [FETCH FIRST n])
-      │
-      └──YES──► COPY_COLUMNS_TND (INSERT WHERE TND=date [FETCH FIRST n])
-      │
-      └─ COMMIT
-      └─ Target = STAGE? ──YES──► set_stage_data_last_tnd
-      
+
 
 
 How to use this Project:
