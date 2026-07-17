@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin – Failed Steps</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/mainstyles.css') }}">
+</head>
+<body>
+    <h1>Failed Steps</h1>
+    <div style="display: inline;">
+        <a href="{{ url_for('index') }}"><button>Main Page</button></a>
+        <a href="{{ url_for('manage_users') }}"><button>Manage Users</button></a>
+    </div>
+
+    {% if failed_logs %}
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <p style="margin: 0;">{{ total }} failed log entries &mdash; page {{ page }} of {{ total_pages }}</p>
+        <div>
+            {% if page > 1 %}
+            <a href="{{ url_for('admin', page=page-1) }}"><button>&larr; Previous</button></a>
+            {% else %}
+            <button disabled>&larr; Previous</button>
+            {% endif %}
+            {% if page < total_pages %}
+            <a href="{{ url_for('admin', page=page+1) }}"><button>Next &rarr;</button></a>
+            {% else %}
+            <button disabled>Next &rarr;</button>
+            {% endif %}
+        </div>
+    </div>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Run ID</th>
+                <th>Test</th>
+                <th>Owner</th>
+                <th>Step</th>
+                <th>Event</th>
+                <th>Event Time</th>
+                <th>Error Message</th>
+                <th>Output Message</th>
+                <th>SQL</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in failed_logs %}
+            <tr>
+                <td>{{ log['RUN_ID'] }}</td>
+                <td><a href="{{ url_for('test_steps', test_id=log['TEST_ID']) }}">{{ log['TEST_NAME'] }}</a></td>
+                <td>{{ log['TEST_OWNER'] }}</td>
+                <td>{{ log['STEP_NAME'] }}</td>
+                <td>{{ log['EVENT'] }}</td>
+                <td>{{ log['EVENT_TIME'] }}</td>
+                <td>{{ log['ERROR_MESSAGE'] }}</td>
+                <td>{{ log['OUTPUT_MESSAGE'] }}</td>
+                <td>{{ log['STEP_SQL'] }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <div style="display: flex; justify-content: flex-end; margin-top: 8px;">
+        {% if page > 1 %}
+        <a href="{{ url_for('admin', page=page-1) }}"><button>&larr; Previous</button></a>
+        {% else %}
+        <button disabled>&larr; Previous</button>
+        {% endif %}
+        {% if page < total_pages %}
+        <a href="{{ url_for('admin', page=page+1) }}"><button>Next &rarr;</button></a>
+        {% else %}
+        <button disabled>Next &rarr;</button>
+        {% endif %}
+    </div>
+    {% else %}
+    <p>No failed steps found.</p>
+    {% endif %}
+</body>
+</html>
