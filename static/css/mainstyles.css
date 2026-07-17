@@ -288,7 +288,7 @@ tr {
 }
 
 .modal .ts-wrapper {
-    width: 30% !important;
+    width: 60% !important;
     font-family: 'Roboto', sans-serif !important;
     font-size: 16px;
     margin: 8px 0;
@@ -399,3 +399,26 @@ tr {
 .delete-job-btn:hover {
     background-color: #ff7875;
 }
+
+.action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    align-items: flex-start;
+}
+
+.action-buttons form {
+    display: contents;
+}
+
+.btn-edit       { background-color: #3b73af; }
+.btn-duplicate  { background-color: #c27b1f; }
+.btn-activate   { background-color: #39832a; }
+.btn-deactivate { background-color: #5a5a5a; }
+.btn-delete     { background-color: #a10003; }
+
+.btn-duplicate:hover                     { background-color: #995e11; }
+.btn-activate:hover                     { background-color: #27631b; }
+.btn-deactivate:hover                     { background-color: rgb(85, 85, 85); }
+.btn-delete:hover                         { background-color: rgb(145, 1, 13); }
+
