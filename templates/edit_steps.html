@@ -106,7 +106,7 @@
                     <h3>Enter Parameters for TABLECOPY_PACKAGE.TABLECOPY</h3>
         
                     <label for="source_schema">Source Schema:</label><br>
-                    <select id="source_schema" name="source_schema" onchange="getTablesForSourceSchema(this.value)">
+                    <select id="source_schema" name="source_schema">
                         <option value="" disabled selected>-- Start typing and select an option --</option>
                         {% for prod_username in prod_usernames %}
                         <option value="{{ prod_username }}">{{ prod_username }}</option>
@@ -117,7 +117,7 @@
                     <select id="source_table" name="source_table"></select><br><br>
                     
                     <label for="target_schema">Target Schema:</label><br>
-                    <select id="target_schema" name="target_schema" onchange="getTablesForTargetSchema(this.value)">
+                    <select id="target_schema" name="target_schema">
                         <option value="" disabled selected>-- Start typing and select an option --</option>
                         {% for username in usernames %}
                         <option value="{{ username }}">{{ username }}</option>
@@ -131,10 +131,15 @@
                     <select id="truncate" name="truncate">
                         <option value="true">True</option>
                         <option value="false">False</option>
-                    </select><br><br>            
-        
+                    </select><br><br>
+
                     <label for="date">Date:</label><br>
-                    <select id="date" name="date"></select><br><br>
+                    <select id="date" name="date" onchange="toggleRowLimit(this.value)"></select><br><br>
+
+                    <div id="rowLimitWrapper" style="display: none;">
+                        <label for="row_limit">Row Limit:</label><br>
+                        <input type="number" id="row_limit" name="row_limit" min="1" placeholder="No limit"><br><br>
+                    </div>
                 </div>
 
 
@@ -142,7 +147,7 @@
                     <h3>Enter Parameters for LM_JOB</h3>
                 
                     <label for="module">Select Module:</label><br>
-                    <select id="module" name="module" onchange="getTypesForModule(this.value); getNamesForModule(this.value)">
+                    <select id="module" name="module">
                         <option value="" disabled selected>-- Start typing and select an option --</option>
                         {% for module in modules %}
                             <option value="{{ module }}">{{ module }}</option>
