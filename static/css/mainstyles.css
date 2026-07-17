@@ -114,6 +114,7 @@ input[type="text"],input[type="password"]{
 }
 
 .modal input[type="text"],
+.modal input[type="number"],
 .modal select
 {
     width: 30%;
@@ -421,4 +422,3 @@ tr {
 .btn-activate:hover                     { background-color: #27631b; }
 .btn-deactivate:hover                     { background-color: rgb(85, 85, 85); }
 .btn-delete:hover                         { background-color: rgb(145, 1, 13); }
-
