@@ -13,9 +13,7 @@
         <button type="submit">Logout</button>
     </form>
     {% if current_user.is_admin %}
-    <form action="{{ url_for('manage_users') }}" method="get" style="display: inline;">
-        <button type="submit">Admin Page</button>
-    </form>
+    <a href="{{ url_for('admin') }}" style="display: inline;"><button>Admin Page</button></a>
     {% endif %}
 
     <a href="{{ url_for('account') }}"><button>Account</button></a>
@@ -44,6 +42,21 @@
     </div>
     
 
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px; margin-bottom: 8px;">
+        <p style="margin: 0;">{{ total }} tests &mdash; page {{ page }} of {{ total_pages }}</p>
+        <div>
+            {% if page > 1 %}
+            <a href="{{ url_for('index', page=page-1, search_name=search_name) }}"><button>&larr; Previous</button></a>
+            {% else %}
+            <button disabled>&larr; Previous</button>
+            {% endif %}
+            {% if page < total_pages %}
+            <a href="{{ url_for('index', page=page+1, search_name=search_name) }}"><button>Next &rarr;</button></a>
+            {% else %}
+            <button disabled>Next &rarr;</button>
+            {% endif %}
+        </div>
+    </div>
     <table border="1">
         <thead>
             <tr>
@@ -64,6 +77,18 @@
             {% endfor %}
         </tbody>
     </table>
+    <div style="display: flex; justify-content: flex-end; margin-top: 8px;">
+        {% if page > 1 %}
+        <a href="{{ url_for('index', page=page-1, search_name=search_name) }}"><button>&larr; Previous</button></a>
+        {% else %}
+        <button disabled>&larr; Previous</button>
+        {% endif %}
+        {% if page < total_pages %}
+        <a href="{{ url_for('index', page=page+1, search_name=search_name) }}"><button>Next &rarr;</button></a>
+        {% else %}
+        <button disabled>Next &rarr;</button>
+        {% endif %}
+    </div>
 
 
     <script src="{{ url_for('static', filename='js/add_test.js') }}"></script>
