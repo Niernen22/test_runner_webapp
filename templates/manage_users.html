@@ -10,6 +10,7 @@
     <h1>User List</h1>
     <div style="display: inline;"> 
         <a href="{{ url_for('index') }}"><button>Main Page</button></a>
+        <a href="{{ url_for('admin') }}"><button>Admin Page</button></a>
 
         <form action="{{ url_for('add_user') }}" method="get" style="display: inline;">
             <button type="submit">Add User</button>
