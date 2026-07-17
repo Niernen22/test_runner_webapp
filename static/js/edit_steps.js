@@ -1,4 +1,58 @@
 let _editingStepId = null;
+let _workdaysLoaded = false;
+let _workdaysPromise = null;
+
+function loadWorkdays() {
+    if (_workdaysLoaded) return Promise.resolve();
+    if (_workdaysPromise) return _workdaysPromise;
+
+    _workdaysPromise = fetch(SCRIPT_ROOT + '/get_workdays', { method: 'GET' })
+        .then(response => {
+            if (!response.ok) throw new Error('Network response was not ok');
+            return response.json();
+        })
+        .then(data => {
+            const dateSelect = document.getElementById('date');
+            if (dateSelect) {
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.textContent = 'no-date-selected';
+                defaultOption.selected = true;
+                dateSelect.appendChild(defaultOption);
+
+                const currentDateOption = document.createElement('option');
+                currentDateOption.value = 'CURRENT_TND';
+                currentDateOption.textContent = 'Current TND';
+                dateSelect.appendChild(currentDateOption);
+
+                const maxTndOption = document.createElement('option');
+                maxTndOption.value = 'MAX_TND';
+                maxTndOption.textContent = 'Max TND';
+                dateSelect.appendChild(maxTndOption);
+
+                data.forEach(function(day) {
+                    const option = document.createElement('option');
+                    option.value = day;
+                    option.textContent = day;
+                    dateSelect.appendChild(option);
+                });
+                _workdaysLoaded = true;
+            }
+        })
+        .catch(error => console.error('Error loading workdays:', error));
+
+    return _workdaysPromise;
+}
+
+function toggleRowLimit(dateValue) {
+    const wrapper = document.getElementById('rowLimitWrapper');
+    if (dateValue && dateValue !== '') {
+        wrapper.style.display = 'block';
+    } else {
+        wrapper.style.display = 'none';
+        document.getElementById('row_limit').value = '';
+    }
+}
 
 function showParametersForm() {
     let selectedType = document.getElementById('step_type').value;
@@ -6,6 +60,7 @@ function showParametersForm() {
         document.getElementById('TablecopyForm').style.display = 'block';
         document.getElementById('LMparametersForm').style.display = 'none';
         document.getElementById('StoredProcedureForm').style.display = 'none';
+        loadWorkdays();
     } else if (selectedType === 'LM_JOB') {
         document.getElementById('TablecopyForm').style.display = 'none';
         document.getElementById('LMparametersForm').style.display = 'block';
@@ -19,6 +74,7 @@ function showParametersForm() {
         document.getElementById('LMparametersForm').style.display = 'none';
         document.getElementById('StoredProcedureForm').style.display = 'none';
     }
+    toggleRowLimit('');
 }
 
 
@@ -272,43 +328,6 @@ function getTablesForSourceSchema(selectedSchema, initialValue = null) {
 }
 
 
-document.addEventListener('DOMContentLoaded', function() {
-    fetch(SCRIPT_ROOT + '/get_workdays', { method: 'GET' })
-        .then(response => {
-            if (!response.ok) throw new Error('Network response was not ok');
-            return response.json();
-        })
-        .then(data => {
-            const dateSelect = document.getElementById('date');
-            if (dateSelect) {
-                const defaultOption = document.createElement('option');
-                defaultOption.value = '';
-                defaultOption.textContent = 'no-date-selected';
-                defaultOption.disabled = true;
-                defaultOption.selected = true;
-                dateSelect.appendChild(defaultOption);
-
-                const currentDateOption = document.createElement('option');
-                currentDateOption.value = 'CURRENT_TND';
-                currentDateOption.textContent = 'Current TND';
-                dateSelect.appendChild(currentDateOption);
-
-                const maxTndOption = document.createElement('option');
-                maxTndOption.value = 'MAX_TND';
-                maxTndOption.textContent = 'Max TND';
-                dateSelect.appendChild(maxTndOption);
-
-                data.forEach(function(day) {
-                    const option = document.createElement('option');
-                    option.value = day;
-                    option.textContent = day;
-                    dateSelect.appendChild(option);
-                });
-            }
-        })
-        .catch(error => console.error('Error:', error));
-});
-
 
 function getNamesForModule(selectedModule, initialValue = null) {
     fetch(SCRIPT_ROOT + '/get_names_for_module?' + new URLSearchParams({ module: selectedModule }))
@@ -395,7 +414,11 @@ function _prefillForm(params) {
             window.targetSchemaSelectInstance.setValue(params.target_schema, true);
             getTablesForTargetSchema(params.target_schema, params.target_table);
             document.getElementById('truncate').value = params.truncate;
-            document.getElementById('date').value = params.date || '';
+            loadWorkdays().then(() => {
+                document.getElementById('date').value = params.date || '';
+                toggleRowLimit(params.date || '');
+                document.getElementById('row_limit').value = params.row_limit || '';
+            });
             break;
 
         case 'LM_JOB':
@@ -451,6 +474,7 @@ function submitFormData() {
         formData.target_table  = document.getElementById('target_table').value.trim();
         formData.truncate      = document.getElementById('truncate').value.trim();
         formData.date          = document.getElementById('date').value.trim();
+        formData.row_limit     = document.getElementById('row_limit').value.trim();
         submitFormDataToServer(formData);
 
     } else if (formData.step_type === 'TRUNCATE_TABLE') {
