@@ -485,6 +485,8 @@ def _build_tablecopy_sql(data):
     target_table  = _default_if_none(data.get('target_table'))
     truncate      = _default_if_none(data.get('truncate'))
     chosen_date   = _default_if_none(data.get('date'))
+    row_limit_raw = data.get('row_limit', 0)
+    row_limit_sql = 'NULL' if not row_limit_raw or int(row_limit_raw) == 0 else str(int(row_limit_raw))
 
     if chosen_date == "CURRENT_TND":
         sql_code = f"""
@@ -494,7 +496,8 @@ def _build_tablecopy_sql(data):
                 p_source_table  => '{source_table}',
                 p_target_schema => '{target_schema}',
                 p_target_table  => '{target_table}',
-                p_truncate      => {truncate}
+                p_truncate      => {truncate},
+                p_row_limit     => {row_limit_sql}
             );
         END;
         """
@@ -506,7 +509,8 @@ def _build_tablecopy_sql(data):
                 p_source_table  => '{source_table}',
                 p_target_schema => '{target_schema}',
                 p_target_table  => '{target_table}',
-                p_truncate      => {truncate}
+                p_truncate      => {truncate},
+                p_row_limit     => {row_limit_sql}
             );
         END;
         """
@@ -519,7 +523,8 @@ def _build_tablecopy_sql(data):
                 p_target_schema => '{target_schema}',
                 p_target_table  => '{target_table}',
                 p_truncate      => {truncate},
-                p_tnd_filter    => NULL
+                p_tnd_filter    => NULL,
+                p_row_limit     => {row_limit_sql}
             );
         END;
         """
@@ -532,7 +537,8 @@ def _build_tablecopy_sql(data):
                 p_target_schema => '{target_schema}',
                 p_target_table  => '{target_table}',
                 p_truncate      => {truncate},
-                p_tnd_filter    => TO_DATE('{chosen_date}', 'yyyy-mm-dd')
+                p_tnd_filter    => TO_DATE('{chosen_date}', 'yyyy-mm-dd'),
+                p_row_limit     => {row_limit_sql}
             );
         END;
         """
