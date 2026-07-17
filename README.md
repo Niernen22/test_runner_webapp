@@ -192,7 +192,8 @@ create table STEP_RUN_LOG
   event_time     TIMESTAMP(6),
   output_message CLOB,
   error_message  CLOB,
-  jobname        VARCHAR2(400 CHAR)
+  jobname        VARCHAR2(400 CHAR),
+  step_sql       CLOB
 )
 tablespace TEST_RUNNER_REPO
   pctfree 10
