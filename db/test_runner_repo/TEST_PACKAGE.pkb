@@ -61,8 +61,8 @@ CREATE OR REPLACE PACKAGE BODY TEST_PACKAGE IS
       DBMS_OUTPUT.PUT_LINE('Updated value: ' || v_name);
 
       -- STEP_RUN_LOG STARTED
-      INSERT INTO STEP_RUN_LOG (RUN_ID, STEP_ID, STEP_NAME, EVENT, EVENT_TIME, OUTPUT_MESSAGE, ERROR_MESSAGE, JOBNAME)
-      VALUES (v_run_id, steporder.id, steporder.name, 'STARTED', SYSTIMESTAMP, NULL, NULL, v_name);
+      INSERT INTO STEP_RUN_LOG (RUN_ID, STEP_ID, STEP_NAME, EVENT, EVENT_TIME, OUTPUT_MESSAGE, ERROR_MESSAGE, JOBNAME, STEP_SQL)
+      VALUES (v_run_id, steporder.id, steporder.name, 'STARTED', SYSTIMESTAMP, NULL, NULL, v_name, v_sqlcode);
       COMMIT;
 
       -- SCHEDULER_JOBLOG PROCEDURE CALL
@@ -106,8 +106,8 @@ CREATE OR REPLACE PACKAGE BODY TEST_PACKAGE IS
       COMMIT;
 
       -- STEP_RUN_LOG FINISHED
-      INSERT INTO STEP_RUN_LOG (RUN_ID, STEP_ID, STEP_NAME, EVENT, EVENT_TIME, OUTPUT_MESSAGE, ERROR_MESSAGE, JOBNAME)
-      VALUES (v_run_id, steporder.id, steporder.name, v_schstatus, SYSTIMESTAMP, v_output, v_error, v_name);
+      INSERT INTO STEP_RUN_LOG (RUN_ID, STEP_ID, STEP_NAME, EVENT, EVENT_TIME, OUTPUT_MESSAGE, ERROR_MESSAGE, JOBNAME, STEP_SQL)
+      VALUES (v_run_id, steporder.id, steporder.name, v_schstatus, SYSTIMESTAMP, v_output, v_error, v_name, v_sqlcode);
       COMMIT;
 
       IF v_schstatus != 'SUCCEEDED' THEN
