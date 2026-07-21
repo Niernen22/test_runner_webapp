@@ -83,12 +83,19 @@ function showSPParametersForm() {
     if (selectedType === 'SingleProcedure') {
         document.getElementById('ProcedureForm').style.display = 'block';
         document.getElementById('PackageForm').style.display = 'none';
+        document.getElementById('FunctionForm').style.display = 'none';
     } else if (selectedType === 'Package') {
         document.getElementById('ProcedureForm').style.display = 'none';
         document.getElementById('PackageForm').style.display = 'block';
+        document.getElementById('FunctionForm').style.display = 'none';
+    } else if (selectedType === 'SingleFunction') {
+        document.getElementById('ProcedureForm').style.display = 'none';
+        document.getElementById('PackageForm').style.display = 'none';
+        document.getElementById('FunctionForm').style.display = 'block';
     } else {
         document.getElementById('ProcedureForm').style.display = 'none';
         document.getElementById('PackageForm').style.display = 'none';
+        document.getElementById('FunctionForm').style.display = 'none';
     }
 }
 
@@ -110,6 +117,91 @@ function getProceduresForSchema(selectedSchema, initialValue = null, onLoaded = 
             }
         })
         .catch(error => console.error('Error:', error));
+}
+
+
+function getFunctionsForSchema(selectedSchema, initialValue = null, onLoaded = null) {
+    const functionObjectSelect = window.functionObjectSelectInstance;
+    functionObjectSelect.clear();
+    functionObjectSelect.clearOptions();
+
+    fetch(SCRIPT_ROOT + '/get_functions_for_schema?' + new URLSearchParams({ schema: selectedSchema }))
+        .then(response => response.json())
+        .then(data => {
+            data.forEach(func => functionObjectSelect.addOption({ value: func, text: func }));
+            functionObjectSelect.refreshOptions(false);
+            if (initialValue) {
+                functionObjectSelect.addOption({ value: initialValue, text: initialValue });
+                functionObjectSelect.setValue(initialValue, true);
+                if (onLoaded) onLoaded();
+            }
+        })
+        .catch(error => console.error('Error:', error));
+}
+
+
+function getParametersForFunction(selectedFunctionName, selectedSchema, initialParamValues = {}) {
+    fetch(SCRIPT_ROOT + '/get_parameters_for_stored_procedure?' + new URLSearchParams({ schema: selectedSchema, storedobject_name: selectedFunctionName }))
+        .then(response => response.json())
+        .then(allDetails => {
+            const parameterDetails = allDetails.filter(p => p.argument_name);
+            const parametersDiv = document.getElementById('parameters_function');
+            parametersDiv.innerHTML = '';
+
+            const hasDateParameter = parameterDetails.some(param => param.data_type === 'DATE');
+            if (hasDateParameter) {
+                fetch(SCRIPT_ROOT + '/get_workdays', { method: 'GET' })
+                    .then(response => response.json())
+                    .then(workdays => {
+                        if (workdays.error) { console.error('Error fetching workdays:', workdays.error); return; }
+                        renderParametersForFunction(parameterDetails, new Set(workdays), initialParamValues);
+                    })
+                    .catch(error => console.error('Error fetching workdays:', error));
+            } else {
+                renderParametersForFunction(parameterDetails, null, initialParamValues);
+            }
+        })
+        .catch(error => console.error('Error fetching parameters:', error));
+}
+
+function renderParametersForFunction(parameterDetails, validDates, initialValues = {}) {
+    const parametersDiv = document.getElementById('parameters_function');
+    parameterDetails.forEach(function(parameter) {
+        const parameterLabel = document.createElement('label');
+        parameterLabel.textContent = parameter.argument_name + ' (' + parameter.data_type + '):';
+        parametersDiv.appendChild(parameterLabel);
+
+        if (parameter.in_out === 'IN' || parameter.in_out === 'IN/OUT') {
+            const parameterInput = document.createElement('input');
+            parameterInput.setAttribute('name', parameter.argument_name);
+            if (parameter.data_type === 'DATE') {
+                parameterInput.type = 'text';
+                parameterInput.classList.add('date-picker');
+                setTimeout(() => {
+                    $(parameterInput).datepicker({
+                        dateFormat: 'yy-mm-dd',
+                        beforeShowDay: function(date) {
+                            let formattedDate = $.datepicker.formatDate('yy-mm-dd', date);
+                            return [validDates ? validDates.has(formattedDate) : true];
+                        }
+                    });
+                }, 0);
+            } else {
+                parameterInput.type = 'text';
+                parameterInput.value = initialValues[parameter.argument_name] || parameter.default_value || '';
+            }
+            parametersDiv.appendChild(parameterInput);
+        }
+
+        if (parameter.in_out === 'OUT' || parameter.in_out === 'IN/OUT') {
+            const outputSpan = document.createElement('span');
+            outputSpan.textContent = ' (Output will be displayed after execution)';
+            outputSpan.style.fontStyle = 'italic';
+            parametersDiv.appendChild(outputSpan);
+        }
+
+        parametersDiv.appendChild(document.createElement('br'));
+    });
 }
 
 
@@ -140,7 +232,7 @@ function renderParameters(parameterDetails, validDates, initialValues = {}) {
     const parametersDiv = document.getElementById('parameters');
     parameterDetails.forEach(function(parameter) {
         const parameterLabel = document.createElement('label');
-        parameterLabel.textContent = parameter.argument_name + ' (' + parameter.in_out + '):';
+        parameterLabel.textContent = parameter.argument_name + ' (' + parameter.data_type + '):';
         parametersDiv.appendChild(parameterLabel);
 
         if (parameter.in_out === 'IN' || parameter.in_out === 'IN/OUT') {
@@ -205,7 +297,7 @@ function renderParametersForPackage(parameterDetails, validDates, initialValues 
     const parametersDiv = document.getElementById('parameters_package');
     parameterDetails.forEach(function(parameter) {
         const parameterLabel = document.createElement('label');
-        parameterLabel.textContent = parameter.argument_name + ' (' + parameter.in_out + '):';
+        parameterLabel.textContent = parameter.argument_name + ' (' + parameter.data_type + '):';
         parametersDiv.appendChild(parameterLabel);
 
         if (parameter.in_out === 'IN' || parameter.in_out === 'IN/OUT') {
@@ -366,6 +458,18 @@ function getTypesForModule(selectedModule, initialValue = null) {
 
 
 function openPopup() {
+    if (!_editingStepId) {
+        document.getElementById('modalTitle').textContent = 'Add Step';
+        document.getElementById('new_step_name').value = '';
+        document.getElementById('step_type').value = 'none';
+        showParametersForm();
+        document.getElementById('storedprocedure_type').value = 'none';
+        showSPParametersForm();
+        document.getElementById('parameters').innerHTML = '';
+        document.getElementById('parameters_package').innerHTML = '';
+        document.getElementById('parameters_function').innerHTML = '';
+    }
+
     const modal = document.getElementById('myModal');
     modal.style.display = 'block';
 
@@ -445,6 +549,11 @@ function _prefillForm(params) {
                     getProceduresForPackage(params.storedpackage_name, params.procedures_schema_package, params.storedobject_name_package, function() {
                         getParametersForStoredProcedureInPackage(params.storedobject_name_package, params.procedures_schema_package, params.storedpackage_name, initialParamValues);
                     });
+                });
+            } else if (params.storedprocedure_type === 'SingleFunction') {
+                window.functionSchemaSelectInstance.setValue(params.procedures_schema_function, true);
+                getFunctionsForSchema(params.procedures_schema_function, params.storedobject_name_function, function() {
+                    getParametersForFunction(params.storedobject_name_function, params.procedures_schema_function, initialParamValues);
                 });
             }
             break;
@@ -532,6 +641,28 @@ function submitFormData() {
                 .catch(error => {
                     console.error('Error fetching parameter details for package:', error);
                     alert('There was an error fetching the parameter details for the package.');
+                });
+
+        } else if (formData.storedprocedure_type === 'SingleFunction') {
+            formData.procedures_schema_function = document.getElementById('procedures_schema_function').value.trim();
+            formData.storedobject_name_function = document.getElementById('storedobject_name_function').value.trim();
+
+            fetch(SCRIPT_ROOT + '/get_parameters_for_stored_procedure?' + new URLSearchParams({ schema: formData.procedures_schema_function, storedobject_name: formData.storedobject_name_function }))
+                .then(response => response.json())
+                .then(allDetails => {
+                    formData.parameter_details = allDetails;
+                    const paramDetails = allDetails.filter(p => p.argument_name);
+                    formData.parameters = paramDetails.map(parameter => ({
+                        name: parameter.argument_name,
+                        type: parameter.in_out,
+                        value: (document.querySelector(`#FunctionForm input[name="${parameter.argument_name}"]`) || {}).value?.trim() || null,
+                        data_type: parameter.data_type
+                    }));
+                    submitFormDataToServer(formData);
+                })
+                .catch(error => {
+                    console.error('Error fetching parameter details for function:', error);
+                    alert('There was an error fetching the parameter details for the function.');
                 });
         }
     } else {
@@ -737,6 +868,25 @@ document.addEventListener('DOMContentLoaded', function () {
             const packageName = document.getElementById('storedpackage_name').value;
             if (!schema || !packageName || !selectedProcedure) return;
             getParametersForStoredProcedureInPackage(selectedProcedure, schema, packageName);
+        }
+    });
+
+    window.functionSchemaSelectInstance = new TomSelect('#procedures_schema_function', {
+        placeholder: '-- Start typing and select an option --',
+        allowEmptyOption: true,
+        onChange: function(value) {
+            getFunctionsForSchema(value);
+        }
+    });
+
+    window.functionObjectSelectInstance = new TomSelect('#storedobject_name_function', {
+        placeholder: '-- Start typing and select an option --',
+        allowEmptyOption: true,
+        onChange: function(value) {
+            const selectedSchema = document.getElementById('procedures_schema_function').value;
+            if (value && selectedSchema) {
+                getParametersForFunction(value, selectedSchema);
+            }
         }
     });
 });
