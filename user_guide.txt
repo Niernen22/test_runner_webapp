@@ -1,0 +1,136 @@
+1. BEJELENTKEZÉS
+
+A bejelentkező oldalon add meg a felhasználónevedet és jelszavadat, majd kattints a Login gombra.
+Az első belépéskor kérjük, változtasd meg a kiosztott alapértelmezett jelszót (lásd: 3. pont).
+Ha elfelejtetted a jelszavadat, írj az ÁIRR Supportnak és adunk újat.
+
+
+2. FŐOLDAL
+
+A főoldalon láthatod az összes létrehozott teszttervet és az alábbi menügombokat:
+- Logout: kijelentkezés
+- Admin Page: csak admin jogosultsággal látható, failed lépések listájához és a felhasználók kezeléséhez vezet
+- Account: saját jelszó megváltoztatásához
+- Search by Owner + Search gomb: a felhasználóneveddel rákereshetsz a saját tesztterveidre (hasznos például annak átnézéséhez, hogy melyik archiválható már)
+
+
+3. FIÓKKEZELÉS
+
+Az Account gombra kattintva megadhatod az új jelszavadat első belépés után (régi jelszó + új jelszó → Change Password).
+
+
+4. ÚJ TESZT LÉTREHOZÁSA
+
+Kattints az Add Test gombra, nevezd el a teszttervet, majd kattints a Submit gombra.
+Létrehozás után az alkalmazás automatikusan a lépések szerkesztő oldalára irányít.
+
+
+5. LÉPÉSEK HOZZÁADÁSA
+
+Az Add Step gombra kattintva nyílik meg az új lépés hozzáadásához szükséges felugró ablak.
+Adj nevet a lépésnek, majd válaszd ki a típusát a legördülő listából – a kiválasztott típusnak megfelelő paraméterek fognak megjelenni.
+Ha minden adat ki van töltve, kattints a Submit gombra. Egy felugró ablak jelzi a hozzáadás eredményét.
+(Fontos: a lépésnek mindenképp legyen neve, különben nem lesz sikeres a hozzáadás!)
+
+
+6. LÉPÉS TÍPUSOK
+
+--- Table Copy ---
+
+A procedúra egy táblát másol át az éles adatbázisból a teszt adatbázisba.
+Szükséges paraméterek:
+- Source Schema / Source Table: az éles tábla sémája és neve
+- Target Schema / Target Table: a teszt tábla sémája és neve
+  (Ha a céltábla nem létezik, vagy a struktúra nem egyezik, a másolás nem fog sikerülni.)
+- Truncate: true, ha le szeretnéd üríteni a táblát másolás előtt, false, ha nem
+  (true + dátum megadásakor csak az adott tnd-hez tartozó sorokat törli)
+- Date: milyen tnd-hez tartozó sorokat szeretnél áttölteni:
+  - Current TND: az ODST aktuális dátuma (teszteléskor néha eltér a reporton láthatótól)
+  - Max TND: a forrástábla legmagasabb tnd értéke
+  - Statikus dátum: bármely elérhető dátum kiválasztható a listából
+
+
+--- LM Job ---
+
+Válaszd ki a modult a legördülő listából. A típus automatikusan kitöltődik a modul alapján.
+Ezután válaszd ki a nevet a szintén automatikusan feltöltődő listából, majd kattints a Submit gombra.
+A futás eredménye (result, err_code, output) a futás után az Output oszlopban jelenik meg.
+
+
+--- Tárolt Eljárás / Függvény ---
+
+Három altípus közül lehet választani:
+
+Procedure – ha az eljárás nem csomag része:
+Válaszd ki a sémát és az eljárás nevét, majd töltsd ki a megjelenő paramétereket.
+
+Package – ha az eljárás egy csomag része:
+Válaszd ki a sémát, a csomag nevét és az eljárásnevet, majd töltsd ki a megjelenő paramétereket.
+
+Function – ha függvényt szeretnél meghívni:
+Válaszd ki a sémát és a függvény nevét, majd töltsd ki a megjelenő paramétereket.
+A függvény visszatérési értéke a futás után az Output oszlopban jelenik meg.
+
+Minden altípusnál:
+- A paraméterek neve mellett zárójelben látható az adattípusuk (pl. NUMBER, VARCHAR2, DATE, PL/SQL BOOLEAN).
+- OUT típusú paramétereknél nincs begépelési lehetőség, értékük a futás után az Output oszlopban jelenik meg.
+- DATE típusú paramétereknél naptárból kell kiválasztani a dátumot.
+
+
+7. LÉPÉSEK KEZELÉSE
+
+A szerkesztő oldalon minden lépés mellett a következő műveletek érhetők el:
+
+- Edit: megnyitja a lépés szerkesztési ablakát, ahol módosíthatók az adatok.
+- Duplicate: másolatot készít a lépésről (ugyanazokkal az adatokkal, szerkeszthető).
+- Deactivate / Activate: átállítja, hogy a lépés fusson-e a következő futáskor.
+  Az inaktív lépések szürke betűkkel jelennek meg.
+  (Hasznos, ha egy lépésre nem minden futásnál van szükség.)
+- Delete: véglegesen törli a lépést.
+
+A lépések sorrendje drag-and-drop mozgatással változtatható meg.
+A szerkesztés befejezéséhez kattints a Finish Editing gombra.
+
+
+8. TESZT FUTTATÁSA
+
+A Finish Editing gomb a teszt részletező oldalára visz, ahol az összes hozzáadott lépés látható.
+A Run Test Plan gombra kattintva elindítható a futás – egy felugró ablak jelzi az indulást és a Run ID-t.
+
+A Status oszlopban követhető a futás állapota:
+- INIT: a lépés még nem indult el
+- RUNNING: a lépés futása folyamatban van
+- SUCCEEDED: sikeresen lefutott
+- FAILED: hiba történt a futás során
+
+A Latest Output oszlop mutatja a futás kimenetét (hasonlóan a PL/SQL Developer Output füléhez).
+
+Fontos: ha egy lépés FAILED státuszba kerül, a következő lépések nem futnak le – INIT állapotban maradnak a következő futásig.
+
+
+9. FUTÁS LEÁLLÍTÁSA (KILL)
+
+Ha egy futás elakad, a Kill gombbal leállítható.
+Egy megerősítő ablak jelenik meg, majd pár másodpercen belül a lépés STOPPED státuszt kap.
+A leállítás után a tesztterv futása nem folytatódik.
+(Az aktuális státusz megtekintéséhez frissítsd az oldalt.)
+
+
+10. ÜTEMEZÉS
+
+A Schedule Test Run gombbal időzített és ismétlődő futásokat lehet beállítani.
+A felugró ablakban meg kell adni a kezdési időpontot és az ismétlési gyakoriságot (csak jövőbeli időpont adható meg).
+Az ütemezett futások kártyákon jelennek meg a gomb alatt, és automatikusan eltűnnek, ha már nem aktuálisak.
+
+
+11. LOGOK
+
+A View Logs gombra kattintva részletes adatok tekinthetők meg az egyes lépések futásáról
+(Run ID, lépésnév, esemény, időpont, kimenet, hibaüzenet).
+
+
+12. ARCHIVÁLÁS
+
+Az Archive Test Plan gombra kattintva a tesztterv archiválható – ezután nem jelenik meg a főoldalon.
+(Az adatbázisban megmarad, és rendszergazdai segítséggel visszaállítható.)
+Kérjük, archiváljátok azokat a tesztterveket, amelyeket már nem használtok, hogy a főoldal áttekinthető maradjon.
