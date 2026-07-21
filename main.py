@@ -420,9 +420,13 @@ def edit_steps(test_id):
         cursor.execute(sql)
         storedpackage_names = [row[0] for row in cursor.fetchall()]
 
+        sql = "SELECT DISTINCT(OBJECT_NAME) FROM DBA_PROCEDURES WHERE OBJECT_TYPE = 'FUNCTION' ORDER BY OBJECT_NAME ASC"
+        cursor.execute(sql)
+        storedfunction_names = [row[0] for row in cursor.fetchall()]
+
         cursor.close()
 
-        return render_template('edit_steps.html', test_id=test_id, test_steps=test_steps_data, prod_usernames=prod_usernames, usernames=usernames, modules=modules, storedobject_names=storedobject_names, procedures_schemas=procedures_schemas, storedpackage_names=storedpackage_names)
+        return render_template('edit_steps.html', test_id=test_id, test_steps=test_steps_data, prod_usernames=prod_usernames, usernames=usernames, modules=modules, storedobject_names=storedobject_names, procedures_schemas=procedures_schemas, storedpackage_names=storedpackage_names, storedfunction_names=storedfunction_names)
 
     except oracledb.Error as error:
         app.logger.error("Failed to load edit steps view", exc_info=True)
@@ -640,6 +644,21 @@ def _build_stored_procedure_sql(data):
         END;
         """
         target_user = procedures_schema
+    elif storedprocedure_type == 'SingleFunction':
+        procedures_schema_function = _default_if_none(data.get('procedures_schema_function'))
+        storedobject_name_function = _default_if_none(data.get('storedobject_name_function'))
+        return_detail = next((p for p in parameter_details if not p.get('argument_name')), None)
+        return_type = _fix_data_type(return_detail['data_type']) if return_detail else 'VARCHAR2(100)'
+        func_declare = [f"v_result {return_type};"] + sql_declare
+        declare_section = f"DECLARE\n    {' '.join(func_declare)}\n"
+        sql_code = f"""
+        {declare_section}BEGIN
+            v_result := {procedures_schema_function}.{storedobject_name_function}({params_str});
+            DBMS_OUTPUT.PUT_LINE(v_result);
+            {output_str}
+        END;
+        """
+        target_user = procedures_schema_function
     else:  # Package
         procedures_schema_package  = _default_if_none(data.get('procedures_schema_package'))
         storedpackage_name         = _default_if_none(data.get('storedpackage_name'))
@@ -903,6 +922,24 @@ def get_procedures_for_schema():
         cursor.close()
         pool.release(connection)
         return json.dumps(procedure_names)
+    except Exception as e:
+        app.logger.error("Lookup endpoint error", exc_info=True)
+        return json.dumps({'error': 'A database error occurred.'})
+
+
+@app.route('/get_functions_for_schema', methods=['GET'])
+@login_required
+def get_functions_for_schema():
+    selected_schema = request.args.get('schema')
+    try:
+        connection = pool.acquire()
+        cursor = connection.cursor()
+        sql = "SELECT DISTINCT(OBJECT_NAME) FROM DBA_PROCEDURES WHERE OBJECT_TYPE = 'FUNCTION' AND OWNER = :schema ORDER BY OBJECT_NAME ASC"
+        cursor.execute(sql, {'schema': selected_schema})
+        function_names = [row[0] for row in cursor.fetchall()]
+        cursor.close()
+        pool.release(connection)
+        return json.dumps(function_names)
     except Exception as e:
         app.logger.error("Lookup endpoint error", exc_info=True)
         return json.dumps({'error': 'A database error occurred.'})
