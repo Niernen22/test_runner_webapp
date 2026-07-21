@@ -169,6 +169,7 @@
                         <option value="none">-- Select an option --</option>
                         <option value="SingleProcedure">Procedure</option>
                         <option value="Package">Package</option>
+                        <option value="SingleFunction">Function</option>
                     </select><br><br>
 
                     <div id="ProcedureForm" style="display: none;">
@@ -191,6 +192,28 @@
 
                         <p>Parameters:</p>
                         <div id="parameters"></div><br><br>
+
+                    </div>
+
+                    <div id="FunctionForm" style="display: none;">
+
+                        <label for="procedures_schema_function">Schema:</label><br>
+                        <select id="procedures_schema_function" name="procedures_schema_function">
+                            <option value="" disabled selected>-- Start typing and select an option --</option>
+                            {% for procedures_schema in procedures_schemas %}
+                            <option value="{{ procedures_schema }}">{{ procedures_schema }}</option>
+                            {% endfor %}
+                        </select><br><br>
+
+                        <label for="storedobject_name_function">Function Name:</label><br>
+                        <select id="storedobject_name_function" name="storedobject_name_function">
+                            {% for storedfunction_name in storedfunction_names %}
+                            <option value="{{ storedfunction_name }}">{{ storedfunction_name }}</option>
+                            {% endfor %}
+                        </select><br><br>
+
+                        <p>Parameters:</p>
+                        <div id="parameters_function"></div><br><br>
 
                     </div>
 
