@@ -263,7 +263,8 @@ TABLECOPY
   │   ├─ RANGE_OR_LIST                                       │
   │   │     ├─ Both RANGE ──► create missing partitions      │
   │   │     ├─ Both LIST  ──► create missing partitions      │
-  │   │     ├─ Mismatch   ──► RAISE ERROR                    │
+  │   │     ├─ Type mismatch ──► RAISE ERROR                 │
+  │   │     ├─ Source partitioned, target not ──► skip       │
   │   │     └─ Both NULL  ──► do nothing (not partitioned)   │
   │   └─ COPY_COLUMNS                                        │
   │         └─ INSERT SELECT [FETCH FIRST n]                 │
