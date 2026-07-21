@@ -636,7 +636,7 @@ BEGIN
         IF v_partition_type1 IS NOT NULL AND v_partition_type2 IS NOT NULL THEN
             RAISE_APPLICATION_ERROR(-20004, 'Partition type mismatch: source is ' || v_partition_type1 || ', target is ' || v_partition_type2);
         ELSIF v_partition_type1 IS NOT NULL AND v_partition_type2 IS NULL THEN
-            RAISE_APPLICATION_ERROR(-20004, 'Source is ' || v_partition_type1 || ' partitioned but target is not partitioned');
+            DBMS_OUTPUT.PUT_LINE('Source is ' || v_partition_type1 || ' partitioned but target is not - skipping partition creation.');
         ELSIF v_partition_type1 IS NULL AND v_partition_type2 IS NOT NULL THEN
             RAISE_APPLICATION_ERROR(-20004, 'Target is ' || v_partition_type2 || ' partitioned but source is not partitioned');
         END IF;
