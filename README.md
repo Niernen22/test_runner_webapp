@@ -212,12 +212,16 @@ alter table USERS add unique (USERNAME);
 
 | | |
 |---|---|
-| ![login](https://github.com/user-attachments/assets/3aaab1d8-2008-493a-95d8-759e03529f13) | ![index](https://github.com/user-attachments/assets/18e5d83b-29f3-4bee-b851-8ca6bc678d22) |
-| ![manage_users](https://github.com/user-attachments/assets/8f34d374-a253-4364-b1ae-158188ba9097) | ![add_user](https://github.com/user-attachments/assets/39cd0346-e06c-4580-95f7-0e0d1016668e) |
-| ![test_steps](https://github.com/user-attachments/assets/3b6cc62b-7c6e-4edf-a6cd-c9bef8b5a862) | ![edit_steps](https://github.com/user-attachments/assets/275d1879-5c48-4fff-a8fc-f35d24824713) |
-| ![add_step_tablecopy](https://github.com/user-attachments/assets/0c5f396b-fcc3-4aa8-beb0-6f388e01332d) | ![add_step_lm](https://github.com/user-attachments/assets/aa63ad2c-4232-43ef-b22d-e1be173aa239) |
-| ![add_step_funcproc](https://github.com/user-attachments/assets/84ad80fd-bfb5-4e64-90bb-6f579c283a01) | ![add_step_package](https://github.com/user-attachments/assets/66238c90-a65d-4af2-b25e-a1a87d2bc2eb) |
-| ![run_test](https://github.com/user-attachments/assets/8bc06e9f-e531-4c2f-9698-3a8b3834e466) | ![edit_steps_order](https://github.com/user-attachments/assets/49f23b83-a55a-4690-b13a-f9eff62dc586) |
+| ![login](docs/screenshots/login.png) | ![index](docs/screenshots/index.png) |
+| ![manage_users](docs/screenshots/manage_users.png) | ![add_user](docs/screenshots/add_user.png) |
+| ![new_password](docs/screenshots/new_password.png) | ![add_test](docs/screenshots/add_test.png) |
+| ![add_step](docs/screenshots/add_step.png) | ![choose_stored_type](docs/screenshots/choose_stored_type.png) |
+| ![add_stored_proc](docs/screenshots/add_stored_proc.png) | ![add_tablecopy_step](docs/screenshots/add_tablecopy_step.png) |
+| ![add_lm](docs/screenshots/add_lm.png) | ![edit_steps](docs/screenshots/edit_steps.png) |
+| ![run](docs/screenshots/run.png) | ![kill](docs/screenshots/kill.png) |
+| ![kill_popup](docs/screenshots/kill_popup.png) | ![schedule_run](docs/screenshots/schedule_run.png) |
+| ![view_logs](docs/screenshots/view_logs.png) | ![error_list](docs/screenshots/error_list.png) |
+| ![archive](docs/screenshots/archive.png) | |
 
 ---
 
@@ -242,3 +246,43 @@ The Table Copy step type uses the `TABLECOPY_PACKAGE` Oracle package. It copies 
 | `p_CEL_TABLA` | VARCHAR2 | Target table name |
 | `p_TRUNCATE` | BOOLEAN | Truncate target before copy (default: FALSE) |
 | `p_TND_SZURES` | DATE | TND filter date (default: NULL) |
+
+**Flow:**
+
+```
+TABLECOPY
+  │
+  ├─ SOURCE_EXISTS? ──NO──► RAISE ERROR
+  ├─ TARGET_EXISTS? ──NO──► RAISE ERROR
+  ├─ COMMON_COLUMNS? ──0──► RAISE ERROR
+  │
+  ├─ TND filter?
+  │
+  ├──NO──────────────────────────────────────────────────────┐
+  │   ├─ Truncate? ──YES──► TRUNCATE whole target table      │
+  │   ├─ RANGE_OR_LIST                                       │
+  │   │     ├─ Both RANGE ──► create missing partitions      │
+  │   │     ├─ Both LIST  ──► create missing partitions      │
+  │   │     ├─ Mismatch   ──► RAISE ERROR                    │
+  │   │     └─ Both NULL  ──► do nothing (not partitioned)   │
+  │   └─ COPY_COLUMNS                                        │
+  │         └─ INSERT SELECT [FETCH FIRST n]                 │
+  │                                                          │
+  └──YES─────────────────────────────────────────────────────┘
+      ├─ Source has TND column? ──NO──► RAISE ERROR
+      ├─ Target has TND column? ──NO──► RAISE ERROR
+      ├─ Check if target's TND partition exists
+      ├─ Truncate? ──YES──► TRUNCATE_TND_TABLE
+      │
+      ├─ TND partition exists?
+      │
+      ├──NO──► Target has any partitions?
+      │             ├──YES──► RANGE_OR_LIST_TND (create TND partition)
+      │             │              └─► COPY_COLUMNS_TND (INSERT WHERE TND=date [FETCH FIRST n])
+      │             └──NO───► COPY_COLUMNS_TND (INSERT WHERE TND=date [FETCH FIRST n])
+      │
+      └──YES──► COPY_COLUMNS_TND (INSERT WHERE TND=date [FETCH FIRST n])
+      │
+      └─ COMMIT
+      └─ Target = STAGE? ──YES──► set_stage_data_last_tnd
+```
